@@ -2,8 +2,8 @@ package net.ltxprogrammer.changed.client.renderer.layers;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.ltxprogrammer.changed.client.renderer.model.LatexHumanoidModel;
-import net.ltxprogrammer.changed.client.renderer.model.TaurChestPackModel;
 import net.ltxprogrammer.changed.client.renderer.model.LowerTorsoedModel;
+import net.ltxprogrammer.changed.client.renderer.model.TaurChestPackModel;
 import net.ltxprogrammer.changed.entity.LatexEntity;
 import net.ltxprogrammer.changed.entity.beast.LatexTaur;
 import net.ltxprogrammer.changed.init.ChangedAbilities;
@@ -35,7 +35,7 @@ public class TaurChestPackLayer<T extends LatexEntity & LatexTaur<T>, M extends 
             pose.pushPose();
             ModelPart modelpart = this.getParentModel().getTorso();
             modelpart.translateAndRotate(pose);
-            pose.translate(0.0D, entity.isCrouching() ? -26.97D / 16.0D : -27.0D / 16.0D, 7.0D / 16.0D);
+            pose.translate(0.0D, entity.isCrouching() ? -14.97D / 16.0D : -15.0D / 16.0D, 7.0D / 16.0D);
             chestPackModel.renderToBuffer(pose, bufferSource.getBuffer(chestPackModel.renderType(chestPackModel.getTexture())), i, OverlayTexture.NO_OVERLAY, 1.0f, 1.0f, 1.0f, 1.0f);
             pose.popPose();
         });

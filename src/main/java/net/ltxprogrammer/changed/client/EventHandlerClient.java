@@ -1,8 +1,8 @@
 package net.ltxprogrammer.changed.client;
 
 import net.ltxprogrammer.changed.Changed;
-import net.ltxprogrammer.changed.block.entity.CardboardBoxBlockEntity;
 import net.ltxprogrammer.changed.data.BiListener;
+import net.ltxprogrammer.changed.entity.SeatEntity;
 import net.ltxprogrammer.changed.fluid.AbstractLatexFluid;
 import net.ltxprogrammer.changed.init.ChangedDamageSources;
 import net.ltxprogrammer.changed.init.ChangedTags;
@@ -17,6 +17,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.*;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -31,7 +32,7 @@ public class EventHandlerClient {
         if (player == null)
             return;
         var oldProgress = ProcessTransfur.getPlayerTransfurProgress(player);
-        if (Math.abs(oldProgress.progress() - progress.progress()) < 0.02f && oldProgress.type().equals(progress.type())) // Prevent sync shudder
+        if (Math.abs(oldProgress.progress() - progress.progress()) < 0.02f && oldProgress.variant() == progress.variant()) // Prevent sync shudder
             return;
         ProcessTransfur.setPlayerTransfurProgress(player, progress);
     });
@@ -46,8 +47,8 @@ public class EventHandlerClient {
             return;
         }
 
-        if (player.vehicle != null && player.vehicle instanceof CardboardBoxBlockEntity.EntityContainer container) {
-            if (player.isInvisible()) {
+        if (player.vehicle != null && player.vehicle instanceof SeatEntity seat) {
+            if (seat.shouldSeatedBeInvisible()) {
                 event.setCanceled(true);
                 return;
             }
@@ -101,13 +102,19 @@ public class EventHandlerClient {
     }
 
     @OnlyIn(Dist.CLIENT)
+    @SubscribeEvent
+    public static void onRegisterReloadListenerEvent(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener(ChangedClient.particleSystem);
+    }
+
+    @OnlyIn(Dist.CLIENT)
     @Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
     public static class ForgeEventHandler {
         @OnlyIn(Dist.CLIENT)
         @SubscribeEvent
-        public static void onRenderNameplateEvent(RenderNameplateEvent event) {
-            if (event.getEntity() instanceof Player player) // Can't believe this is all it takes
-                event.setContent(PatreonBenefits.getPlayerName(player));
+        public static void onNameFormat(PlayerEvent.NameFormat event) {
+            if (event.getEntity() instanceof Player player)
+                event.setDisplayname(PatreonBenefits.getPlayerName(player, event.getDisplayname()));
         }
 
         @SubscribeEvent

@@ -40,7 +40,7 @@ public class LatexStigerModel extends LatexHumanoidModel<LatexStiger> implements
         this.LeftArm = root.getChild("LeftArm");
         this.LeftArm2 = root.getChild("LeftArm2");
         this.LeftArm3 = root.getChild("LeftArm3");
-        animator = LatexAnimator.of(this).addPreset(AnimatorPresets.wolfLike(Head, Torso, LeftArm, RightArm, Torso.getChild("Tail"), List.of(), LeftLeg, RightLeg))
+        animator = LatexAnimator.of(this).addPreset(AnimatorPresets.wolfLikeOld(Head, Torso, LeftArm, RightArm, Torso.getChild("Tail"), List.of(), LeftLeg, RightLeg))
                 .addPreset(AnimatorPresets.armSetTwo(LeftArm, RightArm, LeftArm2, RightArm2))
                 .addPreset(AnimatorPresets.armSetThree(LeftArm, RightArm, LeftArm3, RightArm3));
     }
@@ -203,7 +203,7 @@ public class LatexStigerModel extends LatexHumanoidModel<LatexStiger> implements
     public PoseStack getPlacementCorrectors(CorrectorType type) {
         PoseStack corrector = LatexHumanoidModelInterface.super.getPlacementCorrectors(type);
         if (type.isArm())
-            corrector.translate(0.0f, -5.2f / 17.5f, 0.02f);
+            corrector.translate(0.0f, -2.0f / 8.5f, 0.04f);
         else if (type == CorrectorType.HAIR)
             corrector.translate(0.0f, -1.0f / 16.0f, 0.0f);
         return corrector;

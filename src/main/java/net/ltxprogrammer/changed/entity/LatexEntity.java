@@ -3,11 +3,14 @@ package net.ltxprogrammer.changed.entity;
 import com.mojang.datafixers.util.Pair;
 import net.ltxprogrammer.changed.ability.AbstractAbility;
 import net.ltxprogrammer.changed.ability.AbstractAbilityInstance;
+import net.ltxprogrammer.changed.ability.IAbstractLatex;
 import net.ltxprogrammer.changed.entity.ai.UseAbilityGoal;
 import net.ltxprogrammer.changed.entity.beast.*;
 import net.ltxprogrammer.changed.entity.variant.LatexVariant;
 import net.ltxprogrammer.changed.entity.variant.LatexVariantInstance;
+import net.ltxprogrammer.changed.extension.ChangedCompatibility;
 import net.ltxprogrammer.changed.init.*;
+import net.ltxprogrammer.changed.network.syncher.ChangedEntityDataSerializers;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.Cacheable;
 import net.ltxprogrammer.changed.util.Color3;
@@ -15,9 +18,13 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeMap;
@@ -36,6 +43,7 @@ import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.ForgeMod;
@@ -54,10 +62,61 @@ import static net.ltxprogrammer.changed.entity.variant.LatexVariant.findLatexEnt
 public abstract class LatexEntity extends Monster {
     @Nullable private Player underlyingPlayer;
     private HairStyle hairStyle;
+    private EyeStyle eyeStyle;
     private final Map<AbstractAbility<?>, Pair<Predicate<AbstractAbilityInstance>, AbstractAbilityInstance>> latexAbilities = new HashMap<>();
 
     float crouchAmount;
     float crouchAmountO;
+    public float flyAmount;
+    public float flyAmountO;
+    float tailDragAmount = 0.0F;
+    float tailDragAmountO;
+
+    final Map<SpringType.Direction, EnumMap<SpringType, SpringType.Simulator>> simulatedSprings;
+
+    public BasicPlayerInfo getBasicPlayerInfo() {
+        if (underlyingPlayer instanceof PlayerDataExtension ext)
+            return ext.getBasicPlayerInfo();
+        else
+            return this.entityData.get(DATA_LOCAL_VARIANT_INFO);
+    }
+
+    public float getTailDragAmount(float partialTicks) {
+        return Mth.lerp(Mth.positiveModulo(partialTicks, 1.0F), tailDragAmountO, tailDragAmount);
+    }
+
+    public float getSimulatedSpring(SpringType type, SpringType.Direction direction, float partialTicks) {
+        return simulatedSprings.get(direction).get(type).getSpring(partialTicks);
+    }
+
+    protected static final EntityDataAccessor<OptionalInt> DATA_TARGET_ID = SynchedEntityData.defineId(LatexEntity.class, EntityDataSerializers.OPTIONAL_UNSIGNED_INT);
+    protected static final EntityDataAccessor<BasicPlayerInfo> DATA_LOCAL_VARIANT_INFO = SynchedEntityData.defineId(LatexEntity.class, ChangedEntityDataSerializers.BASIC_PLAYER_INFO);
+    protected static final EntityDataAccessor<Byte> DATA_LATEX_ENTITY_FLAGS = SynchedEntityData.defineId(LatexEntity.class, EntityDataSerializers.BYTE);
+    public static final int FLAG_IS_FLYING = 0;
+
+    @Override
+    protected void defineSynchedData() {
+        super.defineSynchedData();
+        this.entityData.define(DATA_TARGET_ID, OptionalInt.empty());
+        this.entityData.define(DATA_LOCAL_VARIANT_INFO, BasicPlayerInfo.random(this.random));
+        this.entityData.define(DATA_LATEX_ENTITY_FLAGS, (byte)0);
+    }
+
+    @Override
+    public void setTarget(@Nullable LivingEntity entity) {
+        super.setTarget(entity);
+        this.entityData.set(DATA_TARGET_ID, entity != null ? OptionalInt.of(entity.getId()) : OptionalInt.empty());
+    }
+
+    @Nullable
+    @Override
+    public LivingEntity getTarget() {
+        if (this.level.isClientSide) {
+            var id = this.entityData.get(DATA_TARGET_ID);
+            return id.isPresent() && this.level.getEntity(id.getAsInt()) instanceof LivingEntity livingEntity ? livingEntity : null;
+        } else
+            return super.getTarget();
+    }
 
     protected <A extends AbstractAbilityInstance> A registerAbility(Predicate<A> predicate, A instance) {
         return (A) latexAbilities.computeIfAbsent(instance.ability, type -> new Pair<>(
@@ -66,6 +125,10 @@ public abstract class LatexEntity extends Monster {
 
     public float getCrouchAmount(float partialTicks) {
         return Mth.lerp(partialTicks, this.crouchAmountO, this.crouchAmount);
+    }
+
+    public float getFlyAmount(float partialTicks) {
+        return Mth.lerp(partialTicks, this.flyAmountO, this.flyAmount);
     }
 
     public boolean isFullyCrouched() {
@@ -99,11 +162,20 @@ public abstract class LatexEntity extends Monster {
         return hairStyle != null ? hairStyle : HairStyle.BALD.get();
     }
 
+    public EyeStyle getEyeStyle() {
+        return eyeStyle;
+    }
+
     public void setHairStyle(HairStyle style) {
         this.hairStyle = style != null ? style : HairStyle.BALD.get();
     }
 
-    public abstract Color3 getHairColor(int layer);
+    public void setEyeStyle(EyeStyle style) {
+        this.eyeStyle = style != null ? style : EyeStyle.V2;
+    }
+
+    @Deprecated
+    public Color3 getHairColor(int layer) { return Color3.WHITE; }
 
     public HairStyle getDefaultHairStyle() {
         if (this.getValidHairStyles() != null) {
@@ -180,13 +252,17 @@ public abstract class LatexEntity extends Monster {
                 underlyingPlayer.isAutoSpinAttack();
     }
 
+    @Override
+    protected boolean canEnterPose(Pose pose) {
+        if (overridePose != null && overridePose != pose)
+            return false;
+        return super.canEnterPose(pose);
+    }
 
     public EntityDimensions getDimensions(Pose pose) {
         EntityDimensions core = this.getType().getDimensions();
 
-        if (this.isVisuallySwimming())
-            return EntityDimensions.scalable(core.width, core.width);
-        return switch (pose) {
+        return switch (Objects.requireNonNullElse(overridePose, pose)) {
             case STANDING -> core;
             case SLEEPING -> SLEEPING_DIMENSIONS;
             case FALL_FLYING, SWIMMING, SPIN_ATTACK -> EntityDimensions.scalable(core.width, core.width);
@@ -205,7 +281,7 @@ public abstract class LatexEntity extends Monster {
 
     public float getEyeHeightMul() {
         if (this.isCrouching())
-            return 0.82F;
+            return 0.83F;
         else
             return 0.93F;
     }
@@ -248,6 +324,18 @@ public abstract class LatexEntity extends Monster {
             navigation.setCanOpenDoors(true);
 
         hairStyle = this.getDefaultHairStyle();
+        if (level.isClientSide) { // Springs are only simulated on the client side
+            simulatedSprings = new HashMap<>();
+            Arrays.stream(SpringType.Direction.values()).forEach(direction -> {
+                final var map = new EnumMap<SpringType, SpringType.Simulator>(SpringType.class);
+                simulatedSprings.put(direction, map);
+                Arrays.stream(SpringType.values()).forEach(springType -> {
+                    map.put(springType, new SpringType.Simulator(springType));
+                });
+            });
+        } else {
+            simulatedSprings = Map.of();
+        }
     }
 
     protected void setAttributes(AttributeMap attributes) {
@@ -279,6 +367,9 @@ public abstract class LatexEntity extends Monster {
     }
 
     protected boolean targetSelectorTest(LivingEntity livingEntity) {
+        if (livingEntity instanceof Player player && ChangedCompatibility.isPlayerUsedByOtherMod(player))
+            return false;
+
         if ((livingEntity.hasEffect(MobEffects.INVISIBILITY) || livingEntity.isInvisible()) && !livingEntity.isCurrentlyGlowing())
             return false;
 
@@ -291,8 +382,13 @@ public abstract class LatexEntity extends Monster {
         if (getLatexType().isHostileTo(LatexType.getEntityLatexType(livingEntity)))
             return true;
         LatexVariant<?> playerVariant = LatexVariant.getEntityVariant(livingEntity);
-        if (livingEntity instanceof Player && !livingEntity.level.getGameRules().getBoolean(ChangedGameRules.RULE_NPC_WANT_FUSE_PLAYER))
-            return false;
+        if (livingEntity instanceof Player player) {
+            if (!livingEntity.level.getGameRules().getBoolean(ChangedGameRules.RULE_NPC_WANT_FUSE_PLAYER))
+                return false;
+            var instance = ProcessTransfur.getPlayerLatexVariant(player);
+            if (instance != null && instance.ageAsVariant > livingEntity.level.getGameRules().getInt(ChangedGameRules.RULE_FUSABILITY_DURATION_PLAYER))
+                return false;
+        }
         for (var checkVariant : LatexVariant.FUSION_LATEX_FORMS) {
             if (ChangedRegistry.LATEX_VARIANT.get().getValue(checkVariant).isFusionOf(getSelfVariant(), playerVariant))
                 return true;
@@ -307,7 +403,7 @@ public abstract class LatexEntity extends Monster {
 
         final LatexEntity self = this;
         this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 0.4, false));
-        this.goalSelector.addGoal(2, new RandomStrollGoal(this, 0.3));
+        this.goalSelector.addGoal(2, new RandomStrollGoal(this, 0.3, 120, false));
         this.goalSelector.addGoal(3, new LeapAtTargetGoal(this, 0.4f) {
             public boolean canUse() {
                 if (self.getTarget() != null && self.getTarget().position().y() > self.position().y)
@@ -330,7 +426,9 @@ public abstract class LatexEntity extends Monster {
             this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Player.class, true, this::targetSelectorTest));
             this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, LivingEntity.class, true, this::targetSelectorTest));
         }
-        this.goalSelector.addGoal(4, new RandomLookAroundGoal(this));
+        this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 7.0F));
+        this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
+        this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, LatexEntity.class, 7.0F, 0.2F));
         if (!(this instanceof AquaticEntity))
             this.goalSelector.addGoal(5, new FloatGoal(this));
         if (this instanceof PowderSnowWalkable)
@@ -433,8 +531,17 @@ public abstract class LatexEntity extends Monster {
             return this.getHealth() / this.getMaxHealth();
     }
 
+    protected final Vec3 calculateHorizontalViewVector(float yRot) {
+        float f1 = -yRot * ((float)Math.PI / 180F);
+        float f2 = Mth.cos(f1);
+        float f3 = Mth.sin(f1);
+        return new Vec3((double)(f3), 0.0, (double)(f2));
+    }
+
     public void visualTick(Level level) {
         this.crouchAmountO = this.crouchAmount;
+        this.flyAmountO = this.flyAmount;
+
         if (this.isCrouching()) {
             this.crouchAmount += 0.2F;
             if (this.crouchAmount > 3.0F) {
@@ -444,23 +551,33 @@ public abstract class LatexEntity extends Monster {
             this.crouchAmount = 0.0F;
         }
 
-        if (this.getType().is(ChangedTags.EntityTypes.ORGANIC_LATEX))
-            return;
-
-        if (!level.isClientSide)
-            return;
-
-        if (level.random.nextFloat() > getDripRate(1.0f - computeHealthRatio()))
-            return;
-
-        Color3 color = getDripColor();
-        if (color != null) {
-            EntityDimensions dimensions = getDimensions(getPose());
-            double dh = level.random.nextDouble(dimensions.height);
-            double dx = (level.random.nextDouble(dimensions.width) - (0.5 * dimensions.width));
-            double dz = (level.random.nextDouble(dimensions.width) - (0.5 * dimensions.width));
-            level.addParticle(ChangedParticles.drippingLatex(color), xo + dx * 1.2, yo + dh, zo + dz * 1.2, 0.0, 0.0, 0.0);
+        if (this.isFlying()) {
+            this.flyAmount = Math.min(1.0F, this.flyAmount + 0.15F);
+        } else {
+            this.flyAmount = Math.max(0.0F, this.flyAmount - 0.15F);
         }
+
+        if (!this.level.isClientSide) return;
+
+        this.tailDragAmountO = this.tailDragAmount;
+
+        this.tailDragAmount *= 0.75F;
+        this.tailDragAmount -= Math.toRadians(this.yBodyRot - this.yBodyRotO) * 0.35F;
+        this.tailDragAmount = Mth.clamp(this.tailDragAmount, -1.1F, 1.1F);
+
+        simulatedSprings.forEach((direction, map) -> {
+            final float deltaVelocity = direction.apply(this);
+            map.forEach((springType, simulator) -> {
+                simulator.tick(deltaVelocity);
+            });
+        });
+    }
+
+    @Override
+    public boolean hurt(@NotNull DamageSource source, float amount) {
+        if (this.tickCount < 30)
+            return false; //
+        return super.hurt(source, amount);
     }
 
     public double getPassengersRidingOffset() {
@@ -468,7 +585,7 @@ public abstract class LatexEntity extends Monster {
     }
 
     public double getMyRidingOffset() {
-        return -0.4;
+        return -0.475;
     }
 
     protected <T> T callIfNotNull(LatexVariant<?> variant, Function<LatexVariant<?>, T> func, T def) {
@@ -508,10 +625,10 @@ public abstract class LatexEntity extends Monster {
         return this.isCrouching() || this.isVisuallyCrawling();
     }
 
-    public boolean overrideVisuallySwimming = false;
+    public Pose overridePose = null;
     @Override
     public boolean isVisuallySwimming() {
-        if (overrideVisuallySwimming)
+        if (overridePose == Pose.SWIMMING)
             return true;
         return super.isVisuallySwimming();
     }
@@ -521,15 +638,58 @@ public abstract class LatexEntity extends Monster {
         super.readAdditionalSaveData(tag);
         if (tag.contains("HairStyle"))
             hairStyle = ChangedRegistry.HAIR_STYLE.get().getValue(tag.getInt("HairStyle"));
+        if (tag.contains("LocalVariantInfo")) {
+            BasicPlayerInfo info = new BasicPlayerInfo();
+            info.load(tag.getCompound("LocalVariantInfo"));
+            this.entityData.set(DATA_LOCAL_VARIANT_INFO, info);
+        }
+        if (tag.contains("LatexEntityFlags"))
+            this.entityData.set(DATA_LATEX_ENTITY_FLAGS, tag.getByte("LatexEntityFlags"));
     }
 
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putInt("HairStyle", ChangedRegistry.HAIR_STYLE.get().getID(hairStyle));
+        {
+            var bpi = new CompoundTag();
+            this.entityData.get(DATA_LOCAL_VARIANT_INFO).save(bpi);
+            tag.put("LocalVariantInfo", bpi);
+        }
+        tag.putByte("LatexEntityFlags", this.entityData.get(DATA_LATEX_ENTITY_FLAGS));
+    }
+
+    public boolean getLatexEntityFlag(int id) {
+        return (this.entityData.get(DATA_LATEX_ENTITY_FLAGS) & (0b1 << id)) >> id == 1;
+    }
+
+    public void setLatexEntityFlag(int id, boolean value) {
+        byte flags = this.entityData.get(DATA_LATEX_ENTITY_FLAGS);
+        byte givenFlag = (byte)(0b1 << id);
+
+        if (((flags & (0b1 << id)) >> id == 1) == value)
+            return;
+
+        this.entityData.set(DATA_LATEX_ENTITY_FLAGS, (byte)(flags ^ givenFlag));
+    }
+
+    public boolean isFlying() {
+        return getLatexEntityFlag(FLAG_IS_FLYING);
     }
 
     public void onDamagedBy(LivingEntity self, LivingEntity source) {
+
+    }
+
+    public void onReplicateOther(IAbstractLatex other, LatexVariant<?> variant) {
+
+    }
+
+    public CompoundTag savePlayerVariantData() {
+        return new CompoundTag();
+    }
+
+    public void readPlayerVariantData(CompoundTag tag) {
 
     }
 }

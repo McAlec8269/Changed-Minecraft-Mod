@@ -5,7 +5,7 @@ import net.ltxprogrammer.changed.entity.Gender;
 import net.ltxprogrammer.changed.init.ChangedItems;
 import net.ltxprogrammer.changed.init.ChangedMenus;
 import net.ltxprogrammer.changed.init.ChangedRecipeTypes;
-import net.ltxprogrammer.changed.recipe.InfuserRecipes;
+import net.ltxprogrammer.changed.recipe.InfuserRecipe;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -169,7 +169,7 @@ public class InfuserMenu extends RecipeBookMenu<SimpleContainer> implements Supp
             }
         }
 
-        this.customSlots.put(0, this.addSlot(new SlotItemHandler(internal, 0, 133, 33) {
+        this.customSlots.put(0, this.addSlot(new SlotItemHandler(internal, 0, 137, 33) {
 
             @Override
             public boolean mayPlace(ItemStack stack) {
@@ -192,16 +192,16 @@ public class InfuserMenu extends RecipeBookMenu<SimpleContainer> implements Supp
                 }
             }
         }));
-        this.customSlots.put(1, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 0, 61, 15)));
-        this.customSlots.put(2, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 1, 61, 33)));
-        this.customSlots.put(3, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 2, 61, 51)));
-        this.customSlots.put(4, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 3, 79, 15)));
-        this.customSlots.put(5, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 4, 79, 33)));
-        this.customSlots.put(6, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 5, 79, 51)));
-        this.customSlots.put(7, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 6, 97, 15)));
-        this.customSlots.put(8, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 7, 97, 33)));
-        this.customSlots.put(9, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 8, 97, 51)));
-        this.customSlots.put(SLOT_INPUT, this.addSlot(new InfuserSlotItemHandler(this, internal, 1, 25, 33) {
+        this.customSlots.put(1, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 0, 43, 15)));
+        this.customSlots.put(2, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 1, 43, 33)));
+        this.customSlots.put(3, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 2, 43, 51)));
+        this.customSlots.put(4, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 3, 61, 15)));
+        this.customSlots.put(5, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 4, 61, 33)));
+        this.customSlots.put(6, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 5, 61, 51)));
+        this.customSlots.put(7, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 6, 79, 15)));
+        this.customSlots.put(8, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 7, 79, 33)));
+        this.customSlots.put(9, this.addSlot(new InfuserSlotItemHandler(this, craftingGrid, 8, 79, 51)));
+        this.customSlots.put(SLOT_INPUT, this.addSlot(new InfuserSlotItemHandler(this, internal, 1, 18, 33) {
             @Override
             public boolean mayPlace(ItemStack stack) {
                 return stack.is(ChangedItems.BLOOD_SYRINGE.get()) || stack.is(Items.ARROW);
@@ -293,15 +293,17 @@ public class InfuserMenu extends RecipeBookMenu<SimpleContainer> implements Supp
             this.syncCopyContainer();
 
             ServerPlayer serverplayer = (ServerPlayer)this.entity;
-            Optional<InfuserRecipes.InfuserRecipe> recipeOptional = serverplayer.getLevel().getServer().getRecipeManager()
+            Optional<InfuserRecipe> recipeOptional = serverplayer.getLevel().getServer().getRecipeManager()
                     .getRecipeFor(ChangedRecipeTypes.INFUSER_RECIPE, copyContainer, serverplayer.level);
             ItemStack input = this.internal.getStackInSlot(1);
             recipeOptional.ifPresentOrElse(recipe -> {
-                if (input.isEmpty())
+                if (input.isEmpty()) {
+                    this.getResultSlot().set(ItemStack.EMPTY);
                     return;
+                }
 
                 Gender gender = getSelectedGender();
-                ItemStack newStack = recipe.processItem(InfuserRecipes.InfuserRecipe.getBaseFor(input), gender);
+                ItemStack newStack = recipe.processItem(InfuserRecipe.getBaseFor(input), gender);
                 lastAssembledGender = gender;
                 if (input.getTag() != null && input.getTag().contains("owner")) {
                     newStack.getOrCreateTag().putUUID("owner", input.getTag().getUUID("owner"));

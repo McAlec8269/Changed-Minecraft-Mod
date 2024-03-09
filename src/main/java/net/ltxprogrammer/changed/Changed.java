@@ -1,16 +1,21 @@
 package net.ltxprogrammer.changed;
 
+import net.ltxprogrammer.changed.client.ChangedClient;
 import net.ltxprogrammer.changed.client.EventHandlerClient;
 import net.ltxprogrammer.changed.client.RecipeCategories;
+import net.ltxprogrammer.changed.client.latexparticles.LatexParticleType;
+import net.ltxprogrammer.changed.entity.EyeStyle;
 import net.ltxprogrammer.changed.entity.HairStyle;
 import net.ltxprogrammer.changed.entity.PlayerMover;
 import net.ltxprogrammer.changed.init.*;
+import net.ltxprogrammer.changed.network.ChangedPackets;
 import net.ltxprogrammer.changed.network.ExtraJumpKeybind;
 import net.ltxprogrammer.changed.network.VariantAbilityActivate;
 import net.ltxprogrammer.changed.network.packet.*;
 import net.ltxprogrammer.changed.util.PatreonBenefits;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.block.ComposterBlock;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -44,6 +49,7 @@ public class Changed {
     private static final String PROTOCOL_VERSION = "1";
     public static final SimpleChannel PACKET_HANDLER = NetworkRegistry.newSimpleChannel(modResource(MODID), () -> PROTOCOL_VERSION,
             PROTOCOL_VERSION::equals, PROTOCOL_VERSION::equals);
+    private static final ChangedPackets PACKETS = new ChangedPackets(PACKET_HANDLER);
     private static int messageID = 0;
 
     public Changed() {
@@ -51,23 +57,9 @@ public class Changed {
 
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::commonSetup);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::clientSetup);
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> MinecraftForge.EVENT_BUS.register(eventHandlerClient = new EventHandlerClient()));
+        DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> this::registerClientEventListeners);
 
-        // Initialize packet types
-        addNetworkMessage(CheckForUpdatesPacket.class, CheckForUpdatesPacket::new);
-        addNetworkMessage(MountLatexPacket.class, MountLatexPacket::new);
-        addNetworkMessage(SyncSwitchPacket.class, SyncSwitchPacket::new);
-        addNetworkMessage(SyncTransfurPacket.class, SyncTransfurPacket::new);
-        addNetworkMessage(SyncTransfurProgressPacket.class, SyncTransfurProgressPacket::new);
-        addNetworkMessage(QueryTransfurPacket.class, QueryTransfurPacket::new);
-        addNetworkMessage(VariantAbilityActivate.class, VariantAbilityActivate::new);
-        addNetworkMessage(SyncVariantAbilityPacket.class, SyncVariantAbilityPacket::new);
-        addNetworkMessage(MenuUpdatePacket.class, MenuUpdatePacket::new);
-        addNetworkMessage(EmotePacket.class, EmotePacket::new);
-        addNetworkMessage(SyncMoverPacket.class, SyncMoverPacket::new);
-
-        addNetworkMessage(ExtraJumpKeybind.class, ExtraJumpKeybind::buffer, ExtraJumpKeybind::new,
-                ExtraJumpKeybind::handler);
+        PACKETS.registerPackets();
 
         instance = this;
 
@@ -79,6 +71,7 @@ public class Changed {
         HairStyle.REGISTRY.register(modEventBus);
         ChangedAbilities.REGISTRY.register(modEventBus);
         PlayerMover.REGISTRY.register(modEventBus);
+        LatexParticleType.REGISTRY.register(modEventBus);
 
         ChangedEnchantments.REGISTRY.register(modEventBus);
         ChangedRecipeSerializers.REGISTRY.register(modEventBus);
@@ -106,10 +99,20 @@ public class Changed {
                 ex.printStackTrace();
             }
         });
+        event.enqueueWork(() -> {
+            ComposterBlock.COMPOSTABLES.put(ChangedBlocks.ORANGE_TREE_LEAVES.get().asItem(), 0.3F);
+            ComposterBlock.COMPOSTABLES.put(ChangedBlocks.ORANGE_TREE_SAPLING.get().asItem(), 0.3F);
+            ComposterBlock.COMPOSTABLES.put(ChangedItems.ORANGE.get(), 0.65F);
+        });
+    }
+
+    private void registerClientEventListeners() {
+        MinecraftForge.EVENT_BUS.register(eventHandlerClient = new EventHandlerClient());
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
         event.enqueueWork(RecipeCategories::registerCategories);
+        ChangedClient.registerEventListeners();
     }
 
     private static <T> void addNetworkMessage(Class<T> messageType, BiConsumer<T, FriendlyByteBuf> encoder, Function<FriendlyByteBuf, T> decoder,

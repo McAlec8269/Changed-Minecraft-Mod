@@ -2,8 +2,7 @@
 	"credit": "Made with Blockbench",
 	"texture_size": [64, 64],
 	"textures": {
-		"0": "clipboard",
-		"particle": "clipboard"
+		"0": "changed:blocks/clipboard"
 	},
 	"elements": [
 		{
@@ -85,37 +84,42 @@
 	],
 	"display": {
 		"thirdperson_righthand": {
-			"rotation": [0, 135, 0],
-			"translation": [0, 1, -1],
+			"rotation": [90, 0, 90],
+			"translation": [-3.75, -2, -2],
 			"scale": [0.5, 0.5, 0.5]
 		},
 		"thirdperson_lefthand": {
-			"rotation": [0, 135, 0],
-			"translation": [0, 1, -1],
+			"rotation": [90, 0, 90],
+			"translation": [-3.75, -2, -2],
 			"scale": [0.5, 0.5, 0.5]
 		},
 		"firstperson_righthand": {
-			"rotation": [0, 135, 0],
+			"rotation": [55, 0, 34],
+			"translation": [-2, 3.5, 4.25],
 			"scale": [0.5, 0.5, 0.5]
 		},
 		"firstperson_lefthand": {
-			"rotation": [0, 135, 0],
+			"rotation": [55, 0, 34],
+			"translation": [-2, 3.5, 4.25],
 			"scale": [0.5, 0.5, 0.5]
 		},
 		"ground": {
+			"translation": [0, 3, 0],
 			"scale": [0.25, 0.25, 0.25]
 		},
 		"gui": {
-			"rotation": [45, 135, 0],
-			"translation": [0, 0.5, 0],
+			"rotation": [31, 50, 0],
+			"translation": [-0.25, 4, 0],
 			"scale": [0.75, 0.75, 0.75]
 		},
 		"head": {
-			"translation": [0, 2, 0],
-			"scale": [1.47, 1.47, 1.47]
+			"translation": [0, 13.5, 0],
+			"scale": [0.9, 0.9, 0.9]
 		},
 		"fixed": {
-			"translation": [0, 1.75, 0]
+			"rotation": [90, 0, 180],
+			"translation": [0, 0, -6.5],
+			"scale": [0.9, 0.9, 0.9]
 		}
 	},
 	"groups": [
@@ -124,53 +128,6 @@
 			"origin": [8, 8, 8],
 			"color": 0,
 			"children": [0, 1, 2, 3, 4, 5]
-		}
-	],
-	"display": {
-		"thirdperson_righthand": {
-			"rotation": [75, 25, 0],
-			"translation": [0, 2.5, 2],
-			"scale": [0.4, 0.4, 0.4]
-		},
-		"thirdperson_lefthand": {
-			"rotation": [75, 25, 0],
-			"translation": [0, 2.5, 2],
-			"scale": [0.4, 0.4, 0.4]
-		},
-		"firstperson_righthand": {
-			"rotation": [0, 45, 0],
-			"translation": [2.25, 2.5, -0.5],
-			"scale": [0.4, 0.4, 0.4]
-		},
-		"firstperson_lefthand": {
-			"rotation": [0, 45, 0],
-			"translation": [2.25, 2.5, -0.5],
-			"scale": [0.4, 0.4, 0.4]
-		},
-		"ground": {
-			"translation": [0, 3, 0],
-			"scale": [0.25, 0.25, 0.25]
-		},
-		"head": {
-			"translation": [0, 13.5, 0],
-			"scale": [0.9, 0.9, 0.9]
-		},
-		"gui": {
-			"rotation": [31, 50, 0],
-			"translation": [-0.25, 4, 0],
-			"scale": [0.75, 0.75, 0.75]
-		},
-		"fixed": {
-			"translation": [0, 3, 0],
-			"scale": [0.5, 0.5, 0.5]
-		}
-	},
-	"groups": [
-		{
-			"name": "clipboard",
-			"origin": [8, 8, 8],
-			"color": 0,
-			"children": [0]
 		}
 	]
 }

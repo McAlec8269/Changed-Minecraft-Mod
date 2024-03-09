@@ -13,6 +13,7 @@ import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
+import net.minecraft.client.renderer.entity.layers.CustomHeadLayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -36,13 +37,14 @@ public abstract class LatexHumanoidRenderer<T extends LatexEntity, M extends Lat
     }
 
     private void addLayers(EntityRendererProvider.Context context, M main) {
-        if (Changed.config.client.useNewModels.get())
-            hairLayer = new LatexHumanoidHairLayer<>(this, context.getModelSet());
+        /*if (Changed.config.client.useNewModels.get())
+            hairLayer = new LatexHumanoidHairLayer<>(this, context.getModelSet());*/
         this.addLayer(new LatexItemInHandLayer<>(this));
         if (hairLayer != null)
             this.addLayer(hairLayer);
         this.addLayer(new LatexArrowLayer<>(context, this));
         //this.addLayer(new LatexCapeLayer<>(this));
+        this.addLayer(new CustomHeadLayer<>(this, context.getModelSet()));
         this.addLayer(new LatexElytraLayer<>(this, context.getModelSet()));
         this.addLayer(new LatexParrotOnShoulderLayer<>(this, context.getModelSet()));
         this.addLayer(new LatexBeeStingerLayer<>(this));

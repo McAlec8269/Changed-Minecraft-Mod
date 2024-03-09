@@ -2,7 +2,6 @@ package net.ltxprogrammer.changed.ability;
 
 import net.ltxprogrammer.changed.entity.LatexEntity;
 import net.ltxprogrammer.changed.entity.variant.LatexVariant;
-import net.ltxprogrammer.changed.entity.variant.LatexVariantInstance;
 import net.ltxprogrammer.changed.util.CameraUtil;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -35,7 +34,7 @@ public class HypnosisAbility extends SimpleAbility {
             if (livingEntity.getLookAngle().dot(self.getEyePosition().subtract(livingEntity.getEyePosition()).normalize()) < 0.85f)
                 return;
 
-            CameraUtil.tugEntityLookDirection(livingEntity, self,  0.4);
+            CameraUtil.tugEntityLookDirection(livingEntity, self,  0.25);
             livingEntity.addEffect(new MobEffectInstance(MobEffects.CONFUSION, 120, 2, false, false), self);
             livingEntity.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 5, 2, false, false), self);
         });

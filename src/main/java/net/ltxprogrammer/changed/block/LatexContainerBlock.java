@@ -1,31 +1,47 @@
 package net.ltxprogrammer.changed.block;
 
+import net.ltxprogrammer.changed.Changed;
 import net.ltxprogrammer.changed.block.entity.LatexContainerBlockEntity;
 import net.ltxprogrammer.changed.entity.LatexType;
+import net.ltxprogrammer.changed.entity.variant.LatexVariant;
+import net.ltxprogrammer.changed.init.ChangedBlockEntities;
+import net.ltxprogrammer.changed.init.ChangedSounds;
+import net.ltxprogrammer.changed.process.ProcessTransfur;
+import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.LevelReader;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.RenderShape;
-import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Material;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class LatexContainerBlock extends AbstractCustomShapeTallEntityBlock implements NonLatexCoverableBlock {
+public class LatexContainerBlock extends AbstractCustomShapeTallEntityBlock implements NonLatexCoverableBlock, CustomFallable {
     public static final VoxelShape SHAPE_WHOLE = Block.box(4.0D, 0.0D, 4.0D, 12.0D, 24, 12.0D);
 
     public LatexContainerBlock() {
@@ -61,6 +77,18 @@ public class LatexContainerBlock extends AbstractCustomShapeTallEntityBlock impl
     }
 
     private int processBreak(Level level, BlockPos blockPos, LatexType type, int remaining, AtomicBoolean placedFluid) {
+        if (remaining == 16) {
+            var pupType = type.pup.get();
+            if (pupType != null) {
+                var pup = pupType.create(level);
+                if (pup != null) {
+                    pup.moveTo(blockPos.getX(), blockPos.getY(), blockPos.getZ());
+                    level.addFreshEntity(pup);
+                    return 16;
+                }
+            }
+        }
+
         switch (level.getRandom().nextInt(6)) {
             case 0:
                 return 1; // Destroy goo
@@ -124,8 +152,107 @@ public class LatexContainerBlock extends AbstractCustomShapeTallEntityBlock impl
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos blockPos, BlockState blockState) {
-        if (blockState.getValue(HALF) == DoubleBlockHalf.UPPER)
-            return null;
         return new LatexContainerBlockEntity(blockPos, blockState);
+    }
+
+    @Override
+    public boolean stateHasBlockEntity(BlockState blockState) {
+        return blockState.getValue(HALF) == DoubleBlockHalf.LOWER;
+    }
+
+    private void survivedFall(Level level, BlockPos pos, BlockState state) {
+        //FluidState fluid = level.getFluidState(pos.above());
+
+        level.setBlockAndUpdate(pos.above(), state.setValue(HALF, DoubleBlockHalf.UPPER));
+    }
+
+    private double getFallDistance(FallingBlockEntity falling) {
+        return (double)falling.getStartPos().getY() - falling.getY();
+    }
+
+    @Override
+    public ResourceLocation getModelName() {
+        return new ModelResourceLocation(Changed.modResource("latex_container"), "inventory");
+    }
+
+    @Override
+    public void onLand(Level level, BlockPos pos, BlockState state, BlockState fellOn, FallingBlockEntity falling) {
+        var blockEntity = level.getBlockEntity(pos, ChangedBlockEntities.LATEX_CONTAINER.get());
+
+        blockEntity.ifPresent(container -> {
+            if (falling.blockData != null)
+                container.load(falling.blockData);
+        });
+
+        if (getFallDistance(falling) < 2) {
+            survivedFall(level, pos, state);
+            return;
+        } // Container fell too short
+        if (!level.getFluidState(pos).isEmpty()) {
+            survivedFall(level, pos, state);
+            return;
+        } // Container fell in fluid
+
+        level.playSound(null, pos, ChangedSounds.CRASH, SoundSource.BLOCKS, 1.0f, 1.0f);
+
+        blockEntity.ifPresent(container -> {
+            if (container.getFillLevel() == 0)
+                return;
+            final var variant = switch (container.getFillType()) {
+                case DARK_LATEX -> LatexVariant.DARK_LATEX_WOLF_PARTIAL;
+                case WHITE_LATEX -> LatexVariant.WHITE_LATEX_WOLF;
+                default -> null;
+            };
+
+            if (variant == null)
+                return;
+
+            level.getEntitiesOfClass(LivingEntity.class, new AABB(pos)).forEach(livingEntity -> {
+                ProcessTransfur.progressTransfur(livingEntity, 15.0f, variant);
+            });
+        });
+
+        level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState());
+    }
+
+    @Override
+    public void tick(BlockState state, ServerLevel level, BlockPos pos, Random random) {
+        if (isFree(level.getBlockState(pos.below())) && pos.getY() >= level.getMinBuildHeight()) {
+            var blockEntity = level.getBlockEntity(pos, ChangedBlockEntities.LATEX_CONTAINER.get());
+            CompoundTag blockData = blockEntity.map(BlockEntity::saveWithFullMetadata).orElse(null);
+
+            // Remove without breaking
+            level.setBlock(pos, Blocks.AIR.defaultBlockState(), 64 | 3);
+            level.setBlock(pos.above(), Blocks.AIR.defaultBlockState(), 64 | 3);
+
+            FallingBlockEntity fallingBlockEntity = FallingBlockEntity.fall(level, pos, state);
+            fallingBlockEntity.blockData = blockData;
+
+            this.falling(fallingBlockEntity);
+        }
+    }
+
+    protected void falling(FallingBlockEntity blockEntity) {
+        Changed.PACKET_HANDLER.send(PacketDistributor.TRACKING_ENTITY.with(() -> blockEntity), CustomFallable.updateBlockData(blockEntity));
+    }
+
+    protected int getDelayAfterPlace() {
+        return 2;
+    }
+
+    public static boolean isFree(BlockState state) {
+        Material material = state.getMaterial();
+        return state.isAir() || state.is(BlockTags.FIRE) || material.isLiquid() || material.isReplaceable();
+    }
+
+    @Override
+    public void onPlace(BlockState state, Level level, BlockPos pos, BlockState p_53236_, boolean p_53237_) {
+        level.scheduleTick(pos, this, this.getDelayAfterPlace());
+    }
+
+    @Override
+    public BlockState updateShape(BlockState state, Direction direction, BlockState otherState, LevelAccessor level, BlockPos pos, BlockPos otherPos) {
+        level.scheduleTick(pos, this, this.getDelayAfterPlace());
+        return super.updateShape(state, direction, otherState, level, pos, otherPos);
     }
 }

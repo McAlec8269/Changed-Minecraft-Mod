@@ -29,6 +29,7 @@ public class ChangedSounds {
     public static final SoundEvent BUZZER1 = register("buzzer1");
     public static final SoundEvent CHIME2 = register("chime2");
     public static final SoundEvent CLOSE3 = register("close3");
+    public static final SoundEvent CRASH = register("crash");
     public static final SoundEvent EQUIP1 = register("equip1");
     public static final SoundEvent EQUIP2 = register("equip2");
     public static final SoundEvent EQUIP3 = register("equip3");
@@ -36,6 +37,7 @@ public class ChangedSounds {
     public static final SoundEvent GOO = register("goo");
     public static final SoundEvent ICE2 = register("ice2");
     public static final SoundEvent KEY = register("key");
+    public static final SoundEvent LATEX_DRIP = register("latex_drip");
     public static final SoundEvent MONSTER2 = register("monster2");
     public static final SoundEvent OPEN1 = register("open1");
     public static final SoundEvent OPEN2 = register("open2");
@@ -51,8 +53,24 @@ public class ChangedSounds {
     public static final SoundEvent SWITCH2 = register("switch2");
     public static final SoundEvent SWORD1 = register("sword1");
 
-    public static final SoundEvent LATEX_DANCE = register("music_disc.latex_dance");
     public static final SoundEvent OWO = register("music_disc.owo");
+
+    public static final SoundEvent MUSIC_BLACK_GOO_ZONE = register("music.black_goo_zone");
+    public static final SoundEvent MUSIC_CRYSTAL_ZONE = register("music.crystal_zone");
+    public static final SoundEvent MUSIC_GAS_ROOM = register("music.gas_room");
+    public static final SoundEvent MUSIC_LABORATORY = register("music.laboratory");
+    public static final SoundEvent MUSIC_OUTSIDE_THE_TOWER = register("music.outside_the_tower");
+    public static final SoundEvent MUSIC_PURO_THE_BLACK_GOO = register("music.puro_the_black_goo");
+    public static final SoundEvent MUSIC_PUROS_HOME = register("music.puros_home");
+    public static final SoundEvent MUSIC_THE_LIBRARY = register("music.the_library");
+    public static final SoundEvent MUSIC_THE_LION_CHASE = register("music.the_lion_chase");
+    public static final SoundEvent MUSIC_THE_SCARLET_CRYSTAL_MINE = register("music.the_scarlet_crystal_mine");
+    public static final SoundEvent MUSIC_THE_SHARK = register("music.the_shark");
+    public static final SoundEvent MUSIC_THE_SQUID_DOG = register("music.the_squid_dog");
+    public static final SoundEvent MUSIC_THE_WHITE_GOO_JUNGLE = register("music.the_white_goo_jungle");
+    public static final SoundEvent MUSIC_THE_WHITE_TAIL_CHASE_PART_1 = register("music.the_white_tail_chase_part_1");
+    public static final SoundEvent MUSIC_THE_WHITE_TAIL_CHASE_PART_2 = register("music.the_white_tail_chase_part_2");
+    public static final SoundEvent MUSIC_VENT_PIPE = register("music.vent_pipe");
 
     public static class Types {
         // Represents a sound type that has no sound

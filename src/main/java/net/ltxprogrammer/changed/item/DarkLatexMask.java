@@ -2,6 +2,7 @@ package net.ltxprogrammer.changed.item;
 
 import net.ltxprogrammer.changed.entity.LatexEntity;
 import net.ltxprogrammer.changed.entity.variant.LatexVariant;
+import net.ltxprogrammer.changed.init.ChangedSounds;
 import net.ltxprogrammer.changed.init.ChangedTabs;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.minecraft.core.NonNullList;
@@ -25,7 +26,8 @@ public class DarkLatexMask extends Item implements WearableItem {
     public static final List<ResourceLocation> MASKED_LATEXES = new ArrayList<>(List.of(
             LatexVariant.DARK_LATEX_WOLF.male().getFormId(),
             LatexVariant.DARK_LATEX_WOLF.female().getFormId(),
-            LatexVariant.DARK_LATEX_YUFENG.getFormId()
+            LatexVariant.DARK_LATEX_YUFENG.getFormId(),
+            LatexVariant.DARK_LATEX_PUP.getFormId()
     ));
 
     public DarkLatexMask() {
@@ -50,6 +52,14 @@ public class DarkLatexMask extends Item implements WearableItem {
         LatexVariant<?> variant = Syringe.getVariant(itemStack);
         if (variant == null)
             variant = LatexVariant.DARK_LATEX_WOLF.male();
+        if (LatexVariant.getEntityVariant(entity) == LatexVariant.DARK_LATEX_WOLF_PARTIAL) {
+            if (entity.getRandom().nextFloat() > 0.005f) return; // 0.5% chance every tick the entity will switch TF into the mask variant
+
+            ChangedSounds.broadcastSound(ProcessTransfur.changeTransfur(entity, variant), ChangedSounds.POISON, 1.0f, 1.0f);
+            itemStack.shrink(1);
+            return;
+        }
+
         if (ProcessTransfur.progressTransfur(entity, 11.0f, variant))
             itemStack.shrink(1);
     }
@@ -66,6 +76,9 @@ public class DarkLatexMask extends Item implements WearableItem {
 
     @Override
     public boolean allowedToKeepWearing(LivingEntity entity) {
+        if (LatexVariant.getEntityVariant(entity) == LatexVariant.DARK_LATEX_WOLF_PARTIAL)
+            return true;
+
         if (entity instanceof LatexEntity)
             return false;
         else if (entity instanceof Player player && ProcessTransfur.isPlayerLatex(player))

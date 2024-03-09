@@ -10,7 +10,6 @@ import net.ltxprogrammer.changed.process.Pale;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.InputWrapper;
 import net.ltxprogrammer.changed.util.TagUtil;
-import net.ltxprogrammer.changed.world.inventory.SpecialLoadingMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
@@ -18,7 +17,6 @@ import net.minecraft.nbt.IntTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.network.PacketDistributor;
@@ -33,19 +31,14 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
         super(p_36114_, p_36115_, p_36116_, p_36117_);
     }
 
-    @Inject(method = "initMenu", at = @At("TAIL"))
-    public void initMenu(AbstractContainerMenu p_143400_, CallbackInfo ci) {
-        if (p_143400_ instanceof SpecialLoadingMenu special)
-            special.afterInit(p_143400_);
-    }
-
     @Inject(method = "restoreFrom", at = @At("HEAD"))
     public void restoreFrom(ServerPlayer player, boolean restore, CallbackInfo callbackInfo) {
         ServerPlayer self = (ServerPlayer)(Object)this;
         if (player.level.getGameRules().getBoolean(ChangedGameRules.RULE_KEEP_FORM) || restore) {
             ProcessTransfur.ifPlayerLatex(player, oldVariant -> {
-                ProcessTransfur.setPlayerLatexVariant(self, oldVariant.getParent())
-                        .loadAbilities(oldVariant.saveAbilities());
+                var newVariant = ProcessTransfur.setPlayerLatexVariant(self, oldVariant.getParent());
+                newVariant.loadAbilities(oldVariant.saveAbilities());
+                newVariant.getLatexEntity().readPlayerVariantData(oldVariant.getLatexEntity().savePlayerVariantData());
             });
         }
     }
@@ -59,11 +52,11 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
             if (tag.get("TransfurProgress") instanceof IntTag intTag) { // Adapt to old progress saving method
                 ProcessTransfur.setPlayerTransfurProgress(this,
                         new ProcessTransfur.TransfurProgress((float)intTag.getAsInt() * 0.001f,
-                                new ResourceLocation(tag.getString("TransfurProgressType"))));
+                                ChangedRegistry.LATEX_VARIANT.get().getValue(new ResourceLocation(tag.getString("TransfurProgressType")))));
             } else if (tag.get("TransfurProgress") instanceof FloatTag floatTag) {
                 ProcessTransfur.setPlayerTransfurProgress(this,
                         new ProcessTransfur.TransfurProgress(floatTag.getAsFloat(),
-                                new ResourceLocation(tag.getString("TransfurProgressType"))));
+                                ChangedRegistry.LATEX_VARIANT.get().getValue(new ResourceLocation(tag.getString("TransfurProgressType")))));
             }
         }
         if (tag.contains("LatexVariant")) {
@@ -78,6 +71,8 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
         ProcessTransfur.ifPlayerLatex(this, variant -> {
             if (tag.contains("LatexAbilities"))
                 variant.loadAbilities(tag.getCompound("LatexAbilities"));
+            if (tag.contains("LatexData"))
+                variant.getLatexEntity().readPlayerVariantData(tag.getCompound("LatexData"));
         });
 
         if (tag.contains("PlayerMover")) {
@@ -97,11 +92,15 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
     protected void addAdditionalSaveData(CompoundTag tag, CallbackInfo ci) {
         tag.putInt("PaleExposure", Pale.getPaleExposure(this));
         tag.putFloat("TransfurProgress", ProcessTransfur.getPlayerTransfurProgress(this).progress());
-        tag.putString("TransfurProgressType", ProcessTransfur.getPlayerTransfurProgress(this).type().toString());
+        tag.putString("TransfurProgressType", ProcessTransfur.getPlayerTransfurProgress(this).variant().getFormId().toString());
         ProcessTransfur.ifPlayerLatex(this, variant -> {
             TagUtil.putResourceLocation(tag, "LatexVariant", variant.getFormId());
             tag.put("LatexAbilities", variant.saveAbilities());
             tag.putInt("LatexVariantAge", variant.ageAsVariant);
+
+            var entityData = variant.getLatexEntity().savePlayerVariantData();
+            if (!entityData.isEmpty())
+                tag.put("LatexData", entityData);
         });
         var mover = getPlayerMover();
         if (mover != null) {

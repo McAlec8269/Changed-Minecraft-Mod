@@ -1,19 +1,15 @@
 package net.ltxprogrammer.changed.block;
 
-import com.google.common.collect.ImmutableMap;
+import net.ltxprogrammer.changed.Changed;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.StringRepresentable;
-import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.LevelReader;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.Rotation;
-import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
@@ -207,18 +203,21 @@ public class PipeBlock extends Block {
     }
 
     public boolean isPosValidForNeighbors(LevelReader level, BlockPos blockPos) {
-        return
-                isStateValid(adjustNeighborForNewState(level, blockPos, Direction.NORTH)) &&
-                isStateValid(adjustNeighborForNewState(level, blockPos, Direction.SOUTH)) &&
-                isStateValid(adjustNeighborForNewState(level, blockPos, Direction.EAST)) &&
-                isStateValid(adjustNeighborForNewState(level, blockPos, Direction.WEST));
+        return Direction.Plane.HORIZONTAL.stream().allMatch(direction -> isStateValid(adjustNeighborForNewState(level, blockPos, Direction.NORTH)));
     }
 
     @Override
     public BlockState updateShape(BlockState state, Direction direction, BlockState otherState, LevelAccessor level, BlockPos pos, BlockPos otherPos) {
-        var nState = calculateState(level, pos, super.updateShape(state, direction, otherState, level, pos, otherPos));
+        var sState = super.updateShape(state, direction, otherState, level, pos, otherPos);
+        if (direction.getAxis().isVertical())
+            return sState;
 
-        if (!isStateValid(nState) || !isPosValidForNeighbors(level, pos)) {
+        var nState = sState.setValue(BY_DIRECTION.get(direction), connectsTo(level, otherState, otherPos));
+
+        if (!isStateValid(nState)/* || !isPosValidForNeighbors(level, pos)*/) {
+            Changed.LOGGER.debug("Bad state {}, neighbor blocks [n: {}, e: {}, s: {}, w: {}]", nState,
+                    level.getBlockState(pos.north()), level.getBlockState(pos.east()), level.getBlockState(pos.south()), level.getBlockState(pos.west()));
+
             level.destroyBlock(pos, true);
             return Blocks.AIR.defaultBlockState();
         }
@@ -227,13 +226,52 @@ public class PipeBlock extends Block {
     }
 
     public boolean isStateValid(BlockState state) {
-        if (shapesCache.containsKey(state))
-            return !shapesCache.get(state).isEmpty();
+        if (shapesCache.containsKey(state) && !shapesCache.get(state).isEmpty())
+            return true;
+        if (state.is(this))
+            return false;
         return true;
+    }
+
+    public BlockState throwIfInvalid(BlockState state) {
+        if (!isStateValid(state))
+            throw new IllegalArgumentException("BlockState is invalid, " + state.toString());
+        return state;
     }
 
     @Override
     public List<ItemStack> getDrops(BlockState state, LootContext.Builder builder) {
         return List.of(new ItemStack(this));
+    }
+
+    @Override
+    public BlockState mirror(BlockState state, Mirror mirror) {
+        return throwIfInvalid(switch (mirror) {
+            case NONE -> state;
+            case FRONT_BACK -> state.setValue(NORTH, state.getValue(SOUTH)).setValue(SOUTH, state.getValue(NORTH));
+            case LEFT_RIGHT -> state.setValue(EAST, state.getValue(WEST)).setValue(WEST, state.getValue(EAST));
+        });
+    }
+
+    @Override
+    public BlockState rotate(BlockState state, Rotation rotation) {
+        return throwIfInvalid(switch (rotation) {
+            case NONE -> state;
+            case CLOCKWISE_90 -> state
+                    .setValue(NORTH, state.getValue(WEST))
+                    .setValue(EAST, state.getValue(NORTH))
+                    .setValue(SOUTH, state.getValue(EAST))
+                    .setValue(WEST, state.getValue(SOUTH));
+            case CLOCKWISE_180 -> state
+                    .setValue(NORTH, state.getValue(SOUTH))
+                    .setValue(EAST, state.getValue(WEST))
+                    .setValue(SOUTH, state.getValue(NORTH))
+                    .setValue(WEST, state.getValue(EAST));
+            case COUNTERCLOCKWISE_90 -> state
+                    .setValue(NORTH, state.getValue(EAST))
+                    .setValue(EAST, state.getValue(SOUTH))
+                    .setValue(SOUTH, state.getValue(WEST))
+                    .setValue(WEST, state.getValue(NORTH));
+        });
     }
 }

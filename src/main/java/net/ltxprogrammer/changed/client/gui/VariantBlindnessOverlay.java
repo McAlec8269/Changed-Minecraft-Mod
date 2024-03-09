@@ -24,7 +24,7 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(value = Dist.CLIENT)
 public class VariantBlindnessOverlay {
     private static final ResourceLocation TEXTURE = new ResourceLocation("textures/misc/white.png");
-    private static final float ALPHA = 0.65F;
+    private static final float ALPHA = 0.45F;
     private static float alphaO = 0.0F;
 
     @SubscribeEvent(priority = EventPriority.NORMAL)
@@ -45,7 +45,7 @@ public class VariantBlindnessOverlay {
             if (variant.getLatexType() == LatexType.DARK_LATEX)
                 alpha = Mth.lerp(0.65F, alphaO, darkness * ALPHA);
             else
-                alpha = ALPHA;
+                alpha = ALPHA * Minecraft.getInstance().options.screenEffectScale;
             alphaO = alpha;
 
             RenderSystem.disableDepthTest();

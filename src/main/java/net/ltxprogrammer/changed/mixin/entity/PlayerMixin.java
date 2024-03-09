@@ -1,6 +1,7 @@
 package net.ltxprogrammer.changed.mixin.entity;
 
 import net.ltxprogrammer.changed.block.WhiteLatexTransportInterface;
+import net.ltxprogrammer.changed.entity.BasicPlayerInfo;
 import net.ltxprogrammer.changed.entity.PlayerDataExtension;
 import net.ltxprogrammer.changed.entity.PlayerMoverInstance;
 import net.ltxprogrammer.changed.entity.variant.LatexVariant;
@@ -9,13 +10,18 @@ import net.ltxprogrammer.changed.init.ChangedDamageSources;
 import net.ltxprogrammer.changed.init.ChangedSounds;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.CameraUtil;
+import net.ltxprogrammer.changed.util.EntityUtil;
+import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -43,6 +49,13 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
         super(p_20966_, p_20967_);
     }
 
+    @Inject(method = "getMyRidingOffset", at = @At("HEAD"), cancellable = true)
+    public void getMyRidingOffset(CallbackInfoReturnable<Double> callback) {
+        ProcessTransfur.ifPlayerLatex(EntityUtil.playerOrNull(this), variant -> {
+            callback.setReturnValue(variant.getLatexEntity().getMyRidingOffset());
+        });
+    }
+
     @Inject(method = "tryToStartFallFlying", at = @At("HEAD"), cancellable = true)
     protected void tryToStartFallFlying(CallbackInfoReturnable<Boolean> ci) {
         Player player = (Player)(Object)this;
@@ -58,8 +71,21 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
     }
 
     @Inject(method = "tick", at = @At("HEAD"))
-    public void tick(CallbackInfo ci) {
+    public void tickPre(CallbackInfo ci) {
         ProcessTransfur.tickPlayerTransfurProgress((Player)(Object)this);
+    }
+
+    @Inject(method = "tick", at = @At("RETURN"))
+    public void tickPost(CallbackInfo ci) {
+        var tug = CameraUtil.getTugData((Player)(Object)this);
+        if (tug != null) {
+            if (tug.shouldExpire(this)) {
+                CameraUtil.resetTugData((Player)(Object)this);
+                return;
+            }
+
+            tug.ticksExpire--;
+        }
     }
 
     @Inject(method = "getHurtSound", at = @At("HEAD"), cancellable = true)
@@ -76,15 +102,25 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
         }
     }
 
+    @Inject(method = "hurt", at = @At("HEAD"), cancellable = true)
+    public void orNotHurt(DamageSource p_36154_, float p_36155_, CallbackInfoReturnable<Boolean> cir) {
+        ProcessTransfur.ifPlayerLatex(EntityUtil.playerOrNull(this), variant -> {
+            if (variant.ageAsVariant < 30)
+                cir.cancel();
+        });
+    }
+
     // ADDITIONAL DATA
     @Unique
     public LatexVariantInstance<?> latexVariant = null;
     @Unique
-    public ProcessTransfur.TransfurProgress transfurProgress = new ProcessTransfur.TransfurProgress(0, LatexVariant.FALLBACK_VARIANT.getFormId());
+    public ProcessTransfur.TransfurProgress transfurProgress = new ProcessTransfur.TransfurProgress(0, LatexVariant.FALLBACK_VARIANT);
     @Unique
     public CameraUtil.TugData wantToLookAt;
     @Unique
     public int paleExposure;
+    @Unique
+    public BasicPlayerInfo basicPlayerInfo = new BasicPlayerInfo();
 
     @Override
     public LatexVariantInstance<?> getLatexVariant() {
@@ -155,6 +191,13 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
         }
     }
 
+    @Inject(method = "getDimensions", at = @At("HEAD"), cancellable = true)
+    public void getDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> callback) {
+        if (ProcessTransfur.ifPlayerLatex(EntityUtil.playerOrNull(this), variant -> {
+            callback.setReturnValue(variant.getLatexEntity().getDimensions(pose));
+        }));
+    }
+
     @Nullable
     @Override
     public PlayerMoverInstance<?> getPlayerMover() {
@@ -164,5 +207,15 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
     @Override
     public void setPlayerMover(@Nullable PlayerMoverInstance<?> playerMover) {
         this.playerMover = playerMover;
+    }
+
+    @Override
+    public BasicPlayerInfo getBasicPlayerInfo() {
+        return basicPlayerInfo;
+    }
+
+    @Override
+    public void setBasicPlayerInfo(BasicPlayerInfo basicPlayerInfo) {
+        this.basicPlayerInfo = basicPlayerInfo;
     }
 }

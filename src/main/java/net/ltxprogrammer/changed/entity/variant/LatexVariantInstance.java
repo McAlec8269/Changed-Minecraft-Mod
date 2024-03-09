@@ -5,24 +5,29 @@ import net.ltxprogrammer.changed.Changed;
 import net.ltxprogrammer.changed.ability.AbstractAbility;
 import net.ltxprogrammer.changed.ability.AbstractAbilityInstance;
 import net.ltxprogrammer.changed.ability.IAbstractLatex;
-import net.ltxprogrammer.changed.entity.*;
+import net.ltxprogrammer.changed.entity.LatexEntity;
+import net.ltxprogrammer.changed.entity.LatexType;
+import net.ltxprogrammer.changed.entity.PlayerDataExtension;
+import net.ltxprogrammer.changed.entity.TransfurMode;
+import net.ltxprogrammer.changed.extension.ChangedCompatibility;
 import net.ltxprogrammer.changed.init.ChangedCriteriaTriggers;
+import net.ltxprogrammer.changed.init.ChangedRegistry;
 import net.ltxprogrammer.changed.init.ChangedTags;
 import net.ltxprogrammer.changed.item.WearableItem;
+import net.ltxprogrammer.changed.network.packet.BasicPlayerInfoPacket;
 import net.ltxprogrammer.changed.network.packet.SyncMoverPacket;
 import net.ltxprogrammer.changed.network.packet.SyncTransfurPacket;
 import net.ltxprogrammer.changed.process.Pale;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
+import net.ltxprogrammer.changed.util.EntityUtil;
 import net.ltxprogrammer.changed.util.TagUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.HumanoidArm;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.npc.AbstractVillager;
@@ -47,6 +52,7 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -59,6 +65,7 @@ public class LatexVariantInstance<T extends LatexEntity> {
     public final ImmutableMap<AbstractAbility<?>, AbstractAbilityInstance> abilityInstances;
 
     public AbstractAbility<?> selectedAbility = null;
+    public AbstractAbility<?> menuAbility = null;
     public boolean abilityKeyState = false;
     private final AttributeModifier attributeModifierSwimSpeed;
     public TransfurMode transfurMode;
@@ -185,6 +192,11 @@ public class LatexVariantInstance<T extends LatexEntity> {
         if (event.phase == TickEvent.Phase.END) {
             Pale.tickPaleExposure(event.player);
             ProcessTransfur.ifPlayerLatex(event.player, instance -> {
+                if (ChangedCompatibility.isPlayerUsedByOtherMod(event.player)) {
+                    ProcessTransfur.setPlayerLatexVariant(event.player, null);
+                    return;
+                }
+
                 try {
                     instance.tick(event.player);
                     if (!event.player.isSpectator()) {
@@ -220,11 +232,18 @@ public class LatexVariantInstance<T extends LatexEntity> {
     @SubscribeEvent
     public static void onPlayerJoin(EntityJoinWorldEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            SyncTransfurPacket.Builder builder = new SyncTransfurPacket.Builder();
-            player.getServer().getPlayerList().getPlayers().forEach(builder::addPlayer);
+            SyncTransfurPacket.Builder builderTf = new SyncTransfurPacket.Builder();
+            BasicPlayerInfoPacket.Builder builderBPI = new BasicPlayerInfoPacket.Builder();
+            player.getServer().getPlayerList().getPlayers().forEach(builderTf::addPlayer);
+            player.getServer().getPlayerList().getPlayers().forEach(builderBPI::addPlayer);
 
-            Changed.PACKET_HANDLER.send(PacketDistributor.PLAYER.with(() -> player), builder.build());
-            Changed.PACKET_HANDLER.send(PacketDistributor.PLAYER.with(() -> player), new SyncMoverPacket(player));
+            final PacketDistributor.PacketTarget playerTarget = PacketDistributor.PLAYER.with(() -> player);
+            Changed.PACKET_HANDLER.send(playerTarget, builderTf.build());
+            Changed.PACKET_HANDLER.send(playerTarget, builderBPI.build());
+            Changed.PACKET_HANDLER.send(playerTarget, new SyncMoverPacket(player));
+
+            // Send client empty bpi packet, so it'll reply with its bpi
+            Changed.PACKET_HANDLER.send(playerTarget, BasicPlayerInfoPacket.EMPTY);
         }
     }
 
@@ -249,14 +268,26 @@ public class LatexVariantInstance<T extends LatexEntity> {
 
     protected void multiplyMotion(Player player, double mul) {
         var dP = player.getDeltaMovement();
-
-        if (mul > 1f) {
+        if (mul > 1f && dP.lengthSqr() > 0.0) {
             if (player.isOnGround()) {
-                float friction = player.getLevel().getBlockState(player.blockPosition().below())
-                        .getFriction(player.getLevel(), player.blockPosition(), player);
+                float friction = EntityUtil.getFrictionOnBlock(player);
                 double mdP = dP.length();
                 mul = clamp(0.75, mul, lerp(mul, 0.8 * mul / Math.pow(mdP, 1.0/6.0), mdP * 3));
                 mul /= clamp(0.6, 1, friction) * 0.65 + 0.61;
+                mul = Math.max(1.0, mul);
+                if (Double.isNaN(mul)) {
+                    Changed.LOGGER.error("Ran into NaN multiplier, falling back to zero");
+                    mul = 0.0;
+                }
+            }
+        } else if (mul < 1f && dP.lengthSqr() > 0.0) {
+            if (player.isOnGround()) {
+                float friction = EntityUtil.getFrictionOnBlock(player);
+                mul = Math.min(1.0, Mth.map(friction, 1.0, 0.6, 0.95, mul));
+                if (Double.isNaN(mul)) {
+                    Changed.LOGGER.error("Ran into NaN multiplier, falling back to zero");
+                    mul = 0.0;
+                }
             }
         }
 
@@ -396,6 +427,30 @@ public class LatexVariantInstance<T extends LatexEntity> {
         if (parent.rideable() || !parent.hasLegs)
             player.stopRiding();
 
+        if (parent.canGlide) {
+            if (!player.isCreative() && !player.isSpectator()) {
+                if (player.getFoodData().getFoodLevel() <= 6.0F && player.getAbilities().mayfly) {
+                    player.getAbilities().mayfly = false;
+                    player.getAbilities().flying = false;
+                    player.onUpdateAbilities();
+                } else if (player.getFoodData().getFoodLevel() > 6.0F && !player.getAbilities().mayfly) {
+                    player.getAbilities().mayfly = true;
+                    player.onUpdateAbilities();
+                }
+
+                if (player.getAbilities().flying) {
+                    float horizontalPenalty = player.isSprinting() ? 0.825f : 0.8f;
+                    float verticalPenalty = player.getDeltaMovement().y > 0.0 ? 0.45f : 0.8f;
+                    player.setDeltaMovement(player.getDeltaMovement().multiply(horizontalPenalty, verticalPenalty, horizontalPenalty)); // Speed penalty
+                    player.causeFoodExhaustion(player.isSprinting() ? 0.05F : 0.025F); // Food penalty
+                }
+            }
+
+            if (!player.level.isClientSide) {
+                this.entity.setLatexEntityFlag(LatexEntity.FLAG_IS_FLYING, player.getAbilities().flying);
+            }
+        }
+
         player.getArmorSlots().forEach(itemStack -> { // Force unequip invalid items
             if (!canWear(player, itemStack)) {
                 ItemStack copy = itemStack.copy();
@@ -407,12 +462,14 @@ public class LatexVariantInstance<T extends LatexEntity> {
 
         if(!player.level.isClientSide) {
             final double distance = 8D;
-            final double farRunSpeed = 0.5D;
-            final double nearRunSpeed = 0.6666D;
+            final double farRunSpeed = 1.0D;
+            final double nearRunSpeed = 1.2D;
             // Scare mobs
             for (Class<? extends PathfinderMob> entityClass : parent.scares) {
-                if (entityClass.isAssignableFrom(AbstractVillager.class) && parent.ctor.get().is(ChangedTags.EntityTypes.ORGANIC_LATEX))
+                if (entityClass.isAssignableFrom(AbstractVillager.class) && (parent.ctor.get().is(ChangedTags.EntityTypes.ORGANIC_LATEX) || player.isCreative() || player.isSpectator()))
                     continue;
+
+                final double speedScale = entityClass.isAssignableFrom(AbstractVillager.class) ? 0.5D : 1.0D;
 
                 List<? extends PathfinderMob> entitiesScared = player.level.getEntitiesOfClass(entityClass, player.getBoundingBox().inflate(distance, 6D, distance), Objects::nonNull);
                 for(var v : entitiesScared) {
@@ -428,14 +485,14 @@ public class LatexVariantInstance<T extends LatexEntity> {
                             if(path != null)
                             {
                                 double speed = v.distanceToSqr(player) < 49D ? nearRunSpeed : farRunSpeed;
-                                v.getNavigation().moveTo(path, speed);
+                                v.getNavigation().moveTo(path, speed * speedScale);
                             }
                         }
                     }
                     else //the creature is still running away from us
                     {
                         double speed = v.distanceToSqr(player) < 49D ? nearRunSpeed : farRunSpeed;
-                        v.getNavigation().setSpeedModifier(speed);
+                        v.getNavigation().setSpeedModifier(speed * speedScale);
                     }
 
                     if (v.getTarget() == player)
@@ -491,18 +548,11 @@ public class LatexVariantInstance<T extends LatexEntity> {
             }
         }
 
-        else if (player.isAlive() && !parent.breatheMode.canBreatheWater() && parent.breatheMode == LatexVariant.BreatheMode.STRONG) {
-            //if the player is in water, add 1 air every other tick
-            if (player.isEyeInFluid(FluidTags.WATER)) {
-                int air = player.getAirSupply();
-                if (air > -10 && player.tickCount % 2 == 0)
-                    player.setAirSupply(air+1);
-                this.ticksBreathingUnderwater = 0;
-            }
-        }
+        if (!parent.hasLegs && player.isEyeInFluid(FluidTags.WATER))
+            player.setPose(Pose.SWIMMING);
 
         // Speed
-        if(parent.swimSpeed != 0F && player.isInWaterOrBubble()) {
+        if(parent.swimSpeed != 0F && player.getPose() == Pose.SWIMMING) {
             if (parent.swimSpeed > 1f) {
                 var attrib = player.getAttribute(ForgeMod.SWIM_SPEED.get());
                 if (attrib != null && !attrib.hasModifier(attributeModifierSwimSpeed))
@@ -511,9 +561,19 @@ public class LatexVariantInstance<T extends LatexEntity> {
             else {
                 multiplyMotion(player, parent.swimSpeed);
             }
+        } else {
+            var attrib = player.getAttribute(ForgeMod.SWIM_SPEED.get());
+            if (attrib != null && attrib.hasModifier(attributeModifierSwimSpeed))
+                attrib.removePermanentModifier(attributeModifierSwimSpeed.getId());
         }
 
-        if(parent.groundSpeed != 0F && !player.isInWaterOrBubble() && player.isOnGround()) {
+        if (player.isEyeInFluid(FluidTags.WATER) && parent.swimSpeed > 1F) {
+            player.setNoGravity(true);
+        } else if (parent.swimSpeed > 1F) {
+            player.setNoGravity(false);
+        }
+
+        if(parent.groundSpeed != 0F && player.isOnGround()) {
             if (parent.groundSpeed > 1f) {
                 if (!player.isCrouching())
                     multiplyMotion(player, parent.groundSpeed);
@@ -543,11 +603,25 @@ public class LatexVariantInstance<T extends LatexEntity> {
             }
         }
 
+        if (menuAbility != null) {
+            var instance = abilityInstances.get(menuAbility);
+            if (instance != null && player.containerMenu != player.inventoryMenu)
+                instance.tick();
+            else {
+                if (instance != null)
+                    instance.stopUsing();
+                menuAbility = null;
+            }
+        }
+
         sync(player);
     }
 
     public CompoundTag saveAbilities() {
         CompoundTag tagAbilities = new CompoundTag();
+        ResourceLocation selectedKey = ChangedRegistry.ABILITY.get().getKey(this.selectedAbility);
+        if (selectedKey != null)
+            TagUtil.putResourceLocation(tagAbilities, "selectedAbility", selectedKey);
         abilityInstances.forEach((name, ability) -> {
             CompoundTag tagAbility = new CompoundTag();
             ability.saveData(tagAbility);
@@ -558,6 +632,11 @@ public class LatexVariantInstance<T extends LatexEntity> {
     }
 
     public void loadAbilities(CompoundTag tagAbilities) {
+        if (tagAbilities.contains("selectedAbility")) {
+            var savedSelected = ChangedRegistry.ABILITY.get().getValue(TagUtil.getResourceLocation(tagAbilities, "selectedAbility"));
+            if (abilityInstances.containsKey(savedSelected))
+                this.selectedAbility = savedSelected;
+        }
         abilityInstances.forEach((name, instance) -> {
             String abName = Objects.requireNonNull(name.getRegistryName()).toString();
             if (!tagAbilities.contains(abName))
@@ -574,7 +653,15 @@ public class LatexVariantInstance<T extends LatexEntity> {
         if (player.getAttribute(ForgeMod.SWIM_SPEED.get()).hasModifier(attributeModifierSwimSpeed))
             player.getAttribute(ForgeMod.SWIM_SPEED.get()).removePermanentModifier(attributeModifierSwimSpeed.getId());
         player.setHealth(Math.min(player.getMaxHealth(), player.getHealth()));
+        if (parent.canGlide) {
+            player.getAbilities().mayfly = player.isCreative() || player.isSpectator();
+            if (!player.isCreative() && !player.isSpectator()) {
+                player.getAbilities().flying = false;
+            }
+            player.onUpdateAbilities();
+        }
         player.maxUpStep = 0.6F;
+        player.setNoGravity(false);
         player.refreshDimensions();
     }
 
@@ -599,7 +686,7 @@ public class LatexVariantInstance<T extends LatexEntity> {
                 this.selectedAbility = ability;
             else {
                 ability.startUsing(abstractLatex);
-                ability.stopUsing(abstractLatex);
+                this.menuAbility = ability;
             }
         }
     }

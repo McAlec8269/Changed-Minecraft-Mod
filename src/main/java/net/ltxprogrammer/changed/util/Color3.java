@@ -1,7 +1,6 @@
 package net.ltxprogrammer.changed.util;
 
 import com.mojang.serialization.Codec;
-import net.ltxprogrammer.changed.init.ChangedParticles;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -32,7 +31,7 @@ public record Color3(float red, float green, float blue) {
     }
 
     @Nullable
-    private static Color3 parseHex(String tag) {
+    public static Color3 parseHex(String tag) {
         if (tag.length() > 0) {
             if (tag.charAt(0) == '#')
                 tag = tag.substring(1);
@@ -44,6 +43,14 @@ public record Color3(float red, float green, float blue) {
         }
 
         return null;
+    }
+
+    public String toHexCode() {
+        StringBuilder s = new StringBuilder(Integer.toString(toInt(), 16).toUpperCase());
+        while (s.length() < 6)
+            s.insert(0, "0");
+
+        return "#" + s;
     }
 
     public static Color3 getColor(String color) {
@@ -72,5 +79,9 @@ public record Color3(float red, float green, float blue) {
 
     public Color3 mul(float v) {
         return new Color3(red * v, green * v, blue * v);
+    }
+
+    public float dot(Color3 color) {
+        return (red * color.red) + (green * color.green) + (blue * color.blue);
     }
 }
