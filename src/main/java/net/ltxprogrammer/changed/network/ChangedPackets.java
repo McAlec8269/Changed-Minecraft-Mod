@@ -20,7 +20,11 @@ public class ChangedPackets {
 
     public void registerPackets() {
         addNetworkMessage(CheckForUpdatesPacket.class, CheckForUpdatesPacket::new);
-        addNetworkMessage(MountLatexPacket.class, MountLatexPacket::new);
+        addNetworkMessage(GrabEntityPacket.class, GrabEntityPacket::new);
+        addNetworkMessage(GrabEntityPacket.GrabKeyState.class, GrabEntityPacket.GrabKeyState::new);
+        addNetworkMessage(GrabEntityPacket.EscapeKeyState.class, GrabEntityPacket.EscapeKeyState::new);
+        addNetworkMessage(GrabEntityPacket.AnnounceEscapeKey.class, GrabEntityPacket.AnnounceEscapeKey::new);
+        addNetworkMessage(MountTransfurPacket.class, MountTransfurPacket::new);
         addNetworkMessage(SyncSwitchPacket.class, SyncSwitchPacket::new);
         addNetworkMessage(SyncTransfurPacket.class, SyncTransfurPacket::new);
         addNetworkMessage(SyncTransfurProgressPacket.class, SyncTransfurProgressPacket::new);
@@ -32,7 +36,7 @@ public class ChangedPackets {
         addNetworkMessage(SyncMoverPacket.class, SyncMoverPacket::new);
         addNetworkMessage(ServerboundSetGluBlockPacket.class, ServerboundSetGluBlockPacket::new);
         addNetworkMessage(BasicPlayerInfoPacket.class, BasicPlayerInfoPacket::new);
-        addNetworkMessage(SetLatexVariantDataPacket.class, SetLatexVariantDataPacket::new);
+        addNetworkMessage(SetTransfurVariantDataPacket.class, SetTransfurVariantDataPacket::new);
         addNetworkMessage(TugCameraPacket.class, TugCameraPacket::new);
         addNetworkMessage(ExtraJumpKeybind.class, ExtraJumpKeybind::buffer, ExtraJumpKeybind::new, ExtraJumpKeybind::handler);
         addNetworkMessage(CustomFallable.UpdateFallingBlockEntityData.class, CustomFallable.UpdateFallingBlockEntityData::new);

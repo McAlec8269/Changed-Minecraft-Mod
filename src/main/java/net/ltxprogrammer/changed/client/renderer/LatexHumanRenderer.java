@@ -14,7 +14,7 @@ import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 
-public class LatexHumanRenderer extends LatexHumanoidRenderer<LatexHuman, LatexHumanModel, ArmorHumanModel<LatexHuman>> {
+public class LatexHumanRenderer extends AdvancedHumanoidRenderer<LatexHuman, LatexHumanModel, ArmorHumanModel<LatexHuman>> {
 	public LatexHumanRenderer(EntityRendererProvider.Context context, boolean slim) {
 		super(context, new LatexHumanModel(context.bakeLayer(
 				slim ? LatexHumanModel.LAYER_LOCATION_SLIM : LatexHumanModel.LAYER_LOCATION)),
@@ -33,12 +33,12 @@ public class LatexHumanRenderer extends LatexHumanoidRenderer<LatexHuman, LatexH
 	}
 
 	@Override
-	public void render(LatexHuman latex, float p_115456_, float p_115457_, PoseStack p_115458_, MultiBufferSource bufferSource, int p_115460_) {
+	public void render(LatexHuman latex, float yRot, float p_115457_, PoseStack p_115458_, MultiBufferSource bufferSource, int p_115460_) {
 		if (latex.getUnderlyingPlayer() instanceof AbstractClientPlayer clientPlayer)
 			this.model.setModelProperties(clientPlayer);
 		else
 			this.model.defaultModelProperties();
-		super.render(latex, p_115456_, p_115457_, p_115458_, bufferSource, p_115460_);
+		super.render(latex, yRot, p_115457_, p_115458_, bufferSource, p_115460_);
 	}
 
 	@Override

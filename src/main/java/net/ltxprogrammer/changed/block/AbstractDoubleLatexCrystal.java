@@ -1,6 +1,6 @@
 package net.ltxprogrammer.changed.block;
 
-import net.ltxprogrammer.changed.entity.variant.LatexVariant;
+import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.Mth;
@@ -29,7 +29,7 @@ public abstract class AbstractDoubleLatexCrystal extends AbstractLatexCrystal im
     public static final EnumProperty<DoubleBlockHalf> HALF = BlockStateProperties.DOUBLE_BLOCK_HALF;
     //public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
 
-    public AbstractDoubleLatexCrystal(LatexVariant<?> variant, Supplier<? extends Item> crystal, Properties p_53514_) {
+    public AbstractDoubleLatexCrystal(TransfurVariant<?> variant, Supplier<? extends Item> crystal, Properties p_53514_) {
         super(variant, crystal, p_53514_);
         this.registerDefaultState(this.stateDefinition.any().setValue(HALF, DoubleBlockHalf.LOWER));
     }
@@ -60,12 +60,12 @@ public abstract class AbstractDoubleLatexCrystal extends AbstractLatexCrystal im
         p_52872_.setBlock(blockpos, this.defaultBlockState().setValue(HALF, DoubleBlockHalf.UPPER), 3);
     }
 
-    public boolean canSurvive(BlockState blockState, LevelReader p_52888_, BlockPos p_52889_) {
+    public boolean canSurvive(BlockState blockState, LevelReader level, BlockPos blockPos) {
         if (blockState.getValue(HALF) != DoubleBlockHalf.UPPER) {
-            return super.canSurvive(blockState, p_52888_, p_52889_);
+            return super.canSurvive(blockState, level, blockPos);
         } else {
-            BlockState blockstate = p_52888_.getBlockState(p_52889_.below());
-            if (blockState.getBlock() != this) return super.canSurvive(blockState, p_52888_, p_52889_); //Forge: This function is called during world gen and placement, before this block is set, so if we are not 'here' then assume it's the pre-check.
+            BlockState blockstate = level.getBlockState(blockPos.below());
+            if (blockState.getBlock() != this) return super.canSurvive(blockState, level, blockPos); //Forge: This function is called during world gen and placement, before this block is set, so if we are not 'here' then assume it's the pre-check.
             return blockstate.is(this) && blockstate.getValue(HALF) == DoubleBlockHalf.LOWER;
         }
     }

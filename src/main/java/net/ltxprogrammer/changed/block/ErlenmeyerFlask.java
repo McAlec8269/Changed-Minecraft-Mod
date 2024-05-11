@@ -1,16 +1,14 @@
 package net.ltxprogrammer.changed.block;
 
-import net.ltxprogrammer.changed.block.entity.LatexContainerBlockEntity;
 import net.ltxprogrammer.changed.entity.LatexType;
 import net.ltxprogrammer.changed.init.ChangedBlocks;
-import net.ltxprogrammer.changed.item.AbstractLatexGoo;
+import net.ltxprogrammer.changed.item.AbstractLatexItem;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -22,7 +20,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
@@ -68,7 +65,7 @@ public class ErlenmeyerFlask extends Block implements SimpleWaterloggedBlock, No
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
         var itemInHand = player.getItemInHand(hand);
-        if (state.getValue(FILLED) == LatexType.NEUTRAL && itemInHand.getItem() instanceof AbstractLatexGoo goo) {
+        if (state.getValue(FILLED) == LatexType.NEUTRAL && itemInHand.getItem() instanceof AbstractLatexItem goo) {
             if (!player.isCreative())
                 itemInHand.shrink(1);
             level.setBlockAndUpdate(pos, state.setValue(FILLED, goo.getLatexType()));

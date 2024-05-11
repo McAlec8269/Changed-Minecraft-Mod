@@ -2,15 +2,12 @@ package net.ltxprogrammer.changed.mixin.compatibility.NotEnoughAnimations;
 
 import dev.tr7zw.notenoughanimations.access.PlayerData;
 import dev.tr7zw.notenoughanimations.animations.hands.PetAnimation;
-import net.ltxprogrammer.changed.entity.LatexEntity;
-import net.ltxprogrammer.changed.entity.variant.LatexVariant;
-import net.ltxprogrammer.changed.init.ChangedEntities;
+import net.ltxprogrammer.changed.entity.ChangedEntity;
+import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.TamableAnimal;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
@@ -42,10 +39,10 @@ public abstract class PetAnimationMixin {
             if (entHit == null || !(entHit.getEntity() instanceof LivingEntity livingEntity))
                 return;
             ProcessTransfur.getEntityVariant(livingEntity).ifPresent(variant -> {
-                if (livingEntity instanceof LatexEntity latexEntity && latexEntity.isPreventingPlayerRest(entity))
+                if (livingEntity instanceof ChangedEntity ChangedEntity && ChangedEntity.isPreventingPlayerRest(entity))
                     return;
 
-                if (variant == LatexVariant.DARK_LATEX_PUP) {
+                if (variant == TransfurVariant.DARK_LATEX_PUP) {
                     double dif = livingEntity.getY() - entity.getY();
                     if (Math.abs(dif) < 0.6D) {
                         this.targetPet = livingEntity;

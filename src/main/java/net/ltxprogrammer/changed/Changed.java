@@ -4,14 +4,11 @@ import net.ltxprogrammer.changed.client.ChangedClient;
 import net.ltxprogrammer.changed.client.EventHandlerClient;
 import net.ltxprogrammer.changed.client.RecipeCategories;
 import net.ltxprogrammer.changed.client.latexparticles.LatexParticleType;
-import net.ltxprogrammer.changed.entity.EyeStyle;
 import net.ltxprogrammer.changed.entity.HairStyle;
 import net.ltxprogrammer.changed.entity.PlayerMover;
 import net.ltxprogrammer.changed.init.*;
 import net.ltxprogrammer.changed.network.ChangedPackets;
-import net.ltxprogrammer.changed.network.ExtraJumpKeybind;
-import net.ltxprogrammer.changed.network.VariantAbilityActivate;
-import net.ltxprogrammer.changed.network.packet.*;
+import net.ltxprogrammer.changed.network.packet.ChangedPacket;
 import net.ltxprogrammer.changed.util.PatreonBenefits;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
@@ -95,8 +92,7 @@ public class Changed {
                 PatreonBenefits.loadBenefits();
                 PatreonBenefits.UPDATE_CHECKER.start();
             } catch (Exception ex) {
-                Changed.LOGGER.error("Failed to load Patreon Benefits. Patrons will not receive benefits visible to this client.");
-                ex.printStackTrace();
+                Changed.LOGGER.error("Failed to load Patreon Benefits. Patrons will not receive benefits visible to this client.", ex);
             }
         });
         event.enqueueWork(() -> {

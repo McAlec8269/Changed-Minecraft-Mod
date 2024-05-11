@@ -1,9 +1,8 @@
 package net.ltxprogrammer.changed.block;
 
-import com.mojang.datafixers.util.Either;
 import net.ltxprogrammer.changed.block.entity.PillowBlockEntity;
-import net.ltxprogrammer.changed.entity.LatexEntity;
-import net.ltxprogrammer.changed.entity.variant.LatexVariant;
+import net.ltxprogrammer.changed.entity.ChangedEntity;
+import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.init.ChangedBlockEntities;
 import net.ltxprogrammer.changed.init.ChangedTags;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
@@ -19,7 +18,10 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.item.context.BlockPlaceContext;
-import net.minecraft.world.level.*;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.Explosion;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
@@ -27,7 +29,10 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.*;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.material.Material;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.AABB;
@@ -150,7 +155,7 @@ public class Pillow extends BaseEntityBlock implements SeatableBlock, SimpleWate
     }
 
     private boolean kickLatexOutOfBed(Level level, BlockPos pos) {
-        List<LatexEntity> list = level.getEntitiesOfClass(LatexEntity.class, new AABB(pos), LivingEntity::isSleeping);
+        List<ChangedEntity> list = level.getEntitiesOfClass(ChangedEntity.class, new AABB(pos), LivingEntity::isSleeping);
         if (list.isEmpty()) {
             return false;
         } else {
@@ -161,7 +166,7 @@ public class Pillow extends BaseEntityBlock implements SeatableBlock, SimpleWate
 
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult result) {
-        boolean capableOfSleeping = ProcessTransfur.ifPlayerLatex(player, variant -> variant.getParent().is(ChangedTags.LatexVariants.CAN_SLEEP_ON_PILLOWS), () -> false);
+        boolean capableOfSleeping = ProcessTransfur.ifPlayerTransfurred(player, variant -> variant.getParent().is(ChangedTags.TransfurVariants.CAN_SLEEP_ON_PILLOWS), () -> false);
         boolean canSleepNow = net.minecraftforge.event.ForgeEventFactory.fireSleepingTimeCheck(player, Optional.of(pos));
 
         if (level.isClientSide) {
@@ -197,10 +202,10 @@ public class Pillow extends BaseEntityBlock implements SeatableBlock, SimpleWate
     @Override
     public boolean isBed(BlockState state, BlockGetter level, BlockPos pos, @Nullable Entity player) {
         if (player instanceof LivingEntity livingEntity) {
-            var variant = LatexVariant.getEntityVariant(livingEntity);
+            var variant = TransfurVariant.getEntityVariant(livingEntity);
             if (variant == null)
                 return super.isBed(state, level, pos, player);
-            return LatexVariant.getEntityVariant(livingEntity).is(ChangedTags.LatexVariants.CAN_SLEEP_ON_PILLOWS) || super.isBed(state, level, pos, player);
+            return TransfurVariant.getEntityVariant(livingEntity).is(ChangedTags.TransfurVariants.CAN_SLEEP_ON_PILLOWS) || super.isBed(state, level, pos, player);
         }
 
         else {

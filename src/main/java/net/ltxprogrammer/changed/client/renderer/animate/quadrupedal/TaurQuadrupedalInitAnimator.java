@@ -1,13 +1,13 @@
 package net.ltxprogrammer.changed.client.renderer.animate.quadrupedal;
 
-import net.ltxprogrammer.changed.client.renderer.animate.LatexAnimator;
-import net.ltxprogrammer.changed.entity.LatexEntity;
+import net.ltxprogrammer.changed.client.renderer.animate.HumanoidAnimator;
+import net.ltxprogrammer.changed.entity.ChangedEntity;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 
-public class TaurQuadrupedalInitAnimator<T extends LatexEntity, M extends EntityModel<T>> extends AbstractQuadrupedalAnimator<T, M> {
+public class TaurQuadrupedalInitAnimator<T extends ChangedEntity, M extends EntityModel<T>> extends AbstractQuadrupedalAnimator<T, M> {
     public final ModelPart frontLeftLegLower, frontLeftFoot;
     public final ModelPart frontRightLegLower, frontRightFoot;
     public final ModelPart backLeftLegLower, backLeftFoot, backLeftPad;
@@ -31,8 +31,8 @@ public class TaurQuadrupedalInitAnimator<T extends LatexEntity, M extends Entity
     }
 
     @Override
-    public LatexAnimator.AnimateStage preferredStage() {
-        return LatexAnimator.AnimateStage.INIT;
+    public HumanoidAnimator.AnimateStage preferredStage() {
+        return HumanoidAnimator.AnimateStage.INIT;
     }
 
     @Override
@@ -50,6 +50,7 @@ public class TaurQuadrupedalInitAnimator<T extends LatexEntity, M extends Entity
         }
 
         torso.xRot = 0.0F;
+        torso.z = 0.0F;
         torso.y = Mth.lerp(core.ageLerp, 0.0f, Mth.lerp(limbSwingAmount, 1.0f, 0.25f)) + core.hipOffset + (12.0f - core.legLength) + 12.5f;
 
         frontRightLeg.xRot = Mth.cos(limbSwing * 0.6662F) * 1.4F * limbSwingAmount / swingSpeed;

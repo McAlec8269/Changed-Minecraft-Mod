@@ -3,9 +3,9 @@ package net.ltxprogrammer.changed.client.renderer.layers;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.ltxprogrammer.changed.Changed;
-import net.ltxprogrammer.changed.client.renderer.model.LatexHumanoidModel;
+import net.ltxprogrammer.changed.client.renderer.model.AdvancedHumanoidModel;
 import net.ltxprogrammer.changed.entity.BasicPlayerInfo;
-import net.ltxprogrammer.changed.entity.LatexEntity;
+import net.ltxprogrammer.changed.entity.ChangedEntity;
 import net.ltxprogrammer.changed.extension.ChangedCompatibility;
 import net.ltxprogrammer.changed.util.Color3;
 import net.minecraft.client.model.geom.EntityModelSet;
@@ -19,14 +19,49 @@ import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.StringRepresentable;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Supplier;
 
-public class CustomEyesLayer<M extends LatexHumanoidModel<T>, T extends LatexEntity> extends RenderLayer<T, M> {
+public class CustomEyesLayer<M extends AdvancedHumanoidModel<T>, T extends ChangedEntity> extends RenderLayer<T, M> {
+    public enum HeadShape implements StringRepresentable {
+        NORMAL("normal", 0, 0, -4, -8, -4, 8, 8, 8),
+        PUP("pup", 2, 2, -4, -4, -6, 8, 8, 6);
+        final String serializedName;
+        final int texX, texY;
+        final int x, y, z, width, height, depth;
+        final CubeDeformation deformation;
+
+        HeadShape(String serializedName, int texX, int texY, int x, int y, int z, int width, int height, int depth) {
+            this(serializedName, texX, texY, x, y, z, width, height, depth, CubeDeformation.NONE);
+        }
+
+        HeadShape(String serializedName, int texX, int texY, int x, int y, int z, int width, int height, int depth, CubeDeformation deformation) {
+            this.serializedName = serializedName;
+            this.texX = texX;
+            this.texY = texY;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.width = width;
+            this.height = height;
+            this.depth = depth;
+            this.deformation = deformation;
+        }
+
+        CubeListBuilder create() {
+            return CubeListBuilder.create().texOffs(texX, texY).addBox(x, y, z, width, height, depth, deformation);
+        }
+
+        @Override
+        public @NotNull String getSerializedName() {
+            return serializedName;
+        }
+    }
+
     public static class ColorData {
         public final Color3 color;
         public final float alpha;
@@ -55,7 +90,7 @@ public class CustomEyesLayer<M extends LatexHumanoidModel<T>, T extends LatexEnt
         }
     }
 
-    public interface ColorFunction<T extends LatexEntity> extends BiFunction<T, BasicPlayerInfo, ColorData> {
+    public interface ColorFunction<T extends ChangedEntity> extends BiFunction<T, BasicPlayerInfo, ColorData> {
         @Nullable
         ColorData getColor(T entity, BasicPlayerInfo bpi);
 
@@ -73,65 +108,72 @@ public class CustomEyesLayer<M extends LatexHumanoidModel<T>, T extends LatexEnt
     }
 
     public static final ModelLayerLocation HEAD = new ModelLayerLocation(Changed.modResource("head"), "main");
-    private final ModelPart head;
+    private final Map<HeadShape, ModelPart> shapedHeads;
     private final ColorFunction<T> scleraColorFn;
     private final ColorFunction<T> irisColorLeftFn;
     private final ColorFunction<T> irisColorRightFn;
     private final ColorFunction<T> eyeBrowsColorFn;
 
-    public static <T extends LatexEntity> ColorData noRender(T entity, BasicPlayerInfo bpi) {
+    private HeadShape headShape = HeadShape.NORMAL;
+
+    public CustomEyesLayer<M, T> setHeadShape(HeadShape shape) {
+        headShape = shape;
+        return this;
+    }
+
+    public static <T extends ChangedEntity> ColorData noRender(T entity, BasicPlayerInfo bpi) {
         return null;
     }
 
-    public static <T extends LatexEntity> ColorData irisColorLeft(T entity, BasicPlayerInfo bpi) {
+    public static <T extends ChangedEntity> ColorData irisColorLeft(T entity, BasicPlayerInfo bpi) {
         return ColorData.ofColor(bpi.getLeftIrisColor());
     }
 
-    public static <T extends LatexEntity> ColorData irisColorRight(T entity, BasicPlayerInfo bpi) {
+    public static <T extends ChangedEntity> ColorData irisColorRight(T entity, BasicPlayerInfo bpi) {
         return ColorData.ofColor(bpi.getRightIrisColor());
     }
 
-    public static <T extends LatexEntity> ColorData glowingIrisColorLeft(T entity, BasicPlayerInfo bpi) {
+    public static <T extends ChangedEntity> ColorData glowingIrisColorLeft(T entity, BasicPlayerInfo bpi) {
         return ColorData.ofEmissiveColor(bpi.getLeftIrisColor());
     }
 
-    public static <T extends LatexEntity> ColorData glowingIrisColorRight(T entity, BasicPlayerInfo bpi) {
+    public static <T extends ChangedEntity> ColorData glowingIrisColorRight(T entity, BasicPlayerInfo bpi) {
         return ColorData.ofEmissiveColor(bpi.getRightIrisColor());
     }
 
-    public static <T extends LatexEntity> ColorFunction<T> translucentIrisColorLeft(float alpha) {
+    public static <T extends ChangedEntity> ColorFunction<T> translucentIrisColorLeft(float alpha) {
         return (entity, bpi) -> ColorData.ofTranslucentColor(bpi.getLeftIrisColor(), alpha);
     }
 
-    public static <T extends LatexEntity> ColorFunction<T> translucentIrisColorRight(float alpha) {
+    public static <T extends ChangedEntity> ColorFunction<T> translucentIrisColorRight(float alpha) {
         return (entity, bpi) -> ColorData.ofTranslucentColor(bpi.getRightIrisColor(), alpha);
     }
 
-    public static <T extends LatexEntity> ColorData scleraColor(T entity, BasicPlayerInfo bpi) {
+    public static <T extends ChangedEntity> ColorData scleraColor(T entity, BasicPlayerInfo bpi) {
         return ColorData.ofColor(bpi.getScleraColor());
     }
 
-    public static <T extends LatexEntity> ColorData hairColor(T entity, BasicPlayerInfo bpi) {
+    public static <T extends ChangedEntity> ColorData hairColor(T entity, BasicPlayerInfo bpi) {
         return ColorData.ofColor(bpi.getHairColor());
     }
 
-    public static <T extends LatexEntity> ColorFunction<T> fixedColor(Color3 color) {
+    public static <T extends ChangedEntity> ColorFunction<T> fixedColor(Color3 color) {
         return (entity, bpi) -> ColorData.ofColor(color);
     }
 
-    public static <T extends LatexEntity> ColorFunction<T> fixedColorGlowing(Color3 color) {
+    public static <T extends ChangedEntity> ColorFunction<T> fixedColorGlowing(Color3 color) {
         return (entity, bpi) -> ColorData.ofEmissiveColor(color);
     }
 
-    public static <T extends LatexEntity> ColorFunction<T> fixedColor(Color3 color, float alpha) {
+    public static <T extends ChangedEntity> ColorFunction<T> fixedColor(Color3 color, float alpha) {
         return (entity, bpi) -> ColorData.ofTranslucentColor(color, alpha);
     }
 
-    public static <T extends LatexEntity> ColorFunction<T> fixedIfNotDarkLatexOverrideLeft(Color3 color) {
+    public static <T extends ChangedEntity> ColorFunction<T> fixedIfNotDarkLatexOverrideLeft(Color3 color) {
         return (entity, bpi) -> ColorData.ofColor(bpi.isOverrideIrisOnDarkLatex() ? bpi.getLeftIrisColor() : color);
     }
 
-    public static <T extends LatexEntity> ColorFunction<T> fixedIfNotDarkLatexOverrideRight(Color3 color) {
+    public static <T extends ChangedEntity> ColorFunction<T> fixedIfNotDarkLatexOverrideRight(Color3 color) {
         return (entity, bpi) -> ColorData.ofColor(bpi.isOverrideIrisOnDarkLatex() ? bpi.getRightIrisColor() : color);
     }
 
@@ -150,7 +192,11 @@ public class CustomEyesLayer<M extends LatexHumanoidModel<T>, T extends LatexEnt
     public CustomEyesLayer(RenderLayerParent<T, M> parent, EntityModelSet modelSet,
                            ColorFunction<T> scleraColorFn, ColorFunction<T> irisColorLeftFn, ColorFunction<T> irisColorRightFn, ColorFunction<T> eyeBrowsColorFn) {
         super(parent);
-        this.head = modelSet.bakeLayer(HEAD);
+        var root = modelSet.bakeLayer(HEAD);
+        this.shapedHeads = new EnumMap<>(HeadShape.class);
+        Arrays.stream(HeadShape.values()).forEach(shape -> {
+            this.shapedHeads.put(shape, root.getChild(shape.getSerializedName()));
+        });
         this.scleraColorFn = scleraColorFn;
         this.irisColorLeftFn = irisColorLeftFn;
         this.irisColorRightFn = irisColorRightFn;
@@ -161,13 +207,15 @@ public class CustomEyesLayer<M extends LatexHumanoidModel<T>, T extends LatexEnt
         MeshDefinition mesh = new MeshDefinition();
         PartDefinition root = mesh.getRoot();
 
-        root.addOrReplaceChild("head", CubeListBuilder.create().texOffs(0, 0).addBox(-4.0F, -8.0F, -4.0F, 8.0F, 8.0F, 8.0F, CubeDeformation.NONE), PartPose.ZERO);
+        Arrays.stream(HeadShape.values()).forEach(shape -> {
+            root.addOrReplaceChild(shape.getSerializedName(), shape.create(), PartPose.ZERO);
+        });
 
         return LayerDefinition.create(mesh, 32, 32);
     }
 
     private void renderHead(PoseStack pose, VertexConsumer buffer, int packedLight, int overlay, Color3 color, float alpha) {
-        head.render(pose, buffer, packedLight, overlay, color.red(), color.green(), color.blue(), alpha);
+        this.shapedHeads.get(headShape).render(pose, buffer, packedLight, overlay, color.red(), color.green(), color.blue(), alpha);
     }
 
     @Override
@@ -186,7 +234,7 @@ public class CustomEyesLayer<M extends LatexHumanoidModel<T>, T extends LatexEnt
 
         int overlay = LivingEntityRenderer.getOverlayCoords(entity, 0.0F);
 
-        head.copyFrom(this.getParentModel().getHead());
+        this.shapedHeads.get(headShape).copyFrom(this.getParentModel().getHead());
 
         scleraColorFn.getColorSafe(entity, info).ifPresent(data -> {
             renderHead(pose, bufferSource.getBuffer(data.getRenderType(style.getSclera())), packedLight, overlay, data.color, data.alpha);

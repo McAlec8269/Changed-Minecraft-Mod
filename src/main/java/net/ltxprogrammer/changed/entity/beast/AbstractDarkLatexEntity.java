@@ -24,7 +24,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.*;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -149,7 +150,10 @@ public abstract class AbstractDarkLatexEntity extends AbstractLatexWolf implemen
             double d2 = this.random.nextGaussian() * 0.02D;
             this.level.addParticle(particleoptions, this.getRandomX(1.0D), this.getRandomY() + 0.5D, this.getRandomZ(1.0D), d0, d1, d2);
         }
+    }
 
+    protected void spawnHeartParticles() {
+        this.spawnTamingParticles(true);
     }
 
     public void handleEntityEvent(byte event) {
@@ -157,6 +161,8 @@ public abstract class AbstractDarkLatexEntity extends AbstractLatexWolf implemen
             this.spawnTamingParticles(true);
         } else if (event == 6) {
             this.spawnTamingParticles(false);
+        } else if (event == 18) {
+            this.spawnHeartParticles();
         } else {
             super.handleEntityEvent(event);
         }
@@ -197,17 +203,13 @@ public abstract class AbstractDarkLatexEntity extends AbstractLatexWolf implemen
             return flag ? InteractionResult.CONSUME : InteractionResult.PASS;
         } else {
             if (this.isTame()) {
-                /*if (this.isFood(itemstack) && this.getHealth() < this.getMaxHealth()) {
-                    this.heal((float) itemstack.getFoodProperties(this).getNutrition());
-                    if (!player.getAbilities().instabuild) {
-                        itemstack.shrink(1);
-                    }
-
+                if (this.isTame() && this.isTameItem(itemstack) && this.getHealth() < this.getMaxHealth()) {
+                    itemstack.shrink(1);
+                    this.heal(2.0F);
                     this.gameEvent(GameEvent.MOB_INTERACT, this.eyeBlockPosition());
+                    this.level.broadcastEntityEvent(this, (byte)7); // Spawn hearts
                     return InteractionResult.SUCCESS;
-                }*/
-
-                /*else*/ {
+                } else {
                     InteractionResult interactionresult = super.mobInteract(player, hand);
                     if ((!interactionresult.consumesAction() || this.isBaby()) && this.isOwnedBy(player)) {
                         boolean shouldFollow = !this.isFollowingOwner();

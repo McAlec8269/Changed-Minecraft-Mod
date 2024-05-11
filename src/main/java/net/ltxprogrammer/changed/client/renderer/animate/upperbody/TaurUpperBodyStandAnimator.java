@@ -1,26 +1,26 @@
 package net.ltxprogrammer.changed.client.renderer.animate.upperbody;
 
-import net.ltxprogrammer.changed.client.renderer.animate.LatexAnimator;
-import net.ltxprogrammer.changed.entity.LatexEntity;
+import net.ltxprogrammer.changed.client.renderer.animate.HumanoidAnimator;
+import net.ltxprogrammer.changed.entity.ChangedEntity;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.NotNull;
 
-public class TaurUpperBodyStandAnimator<T extends LatexEntity, M extends EntityModel<T>> extends AbstractUpperBodyAnimator<T, M> {
+public class TaurUpperBodyStandAnimator<T extends ChangedEntity, M extends EntityModel<T>> extends AbstractUpperBodyAnimator<T, M> {
     public TaurUpperBodyStandAnimator(ModelPart head, ModelPart torso, ModelPart leftArm, ModelPart rightArm) {
         super(head, torso, leftArm, rightArm);
     }
 
     @Override
-    public LatexAnimator.AnimateStage preferredStage() {
-        return LatexAnimator.AnimateStage.STAND;
+    public HumanoidAnimator.AnimateStage preferredStage() {
+        return HumanoidAnimator.AnimateStage.STAND;
     }
 
     @Override
     public void setupAnim(@NotNull T entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch) {
-        torso.z = Mth.lerp(core.ageLerp, -0.2f, -0.8f) + core.forwardOffset;
-        torso.z = Mth.lerp(limbSwingAmount, torso.z, core.forwardOffset);
+        torso.z = Mth.lerp(core.ageLerp, -0.2f, -0.8f);
+        torso.z = Mth.lerp(limbSwingAmount, torso.z, 0.0F);
         head.z = torso.z;
         leftArm.z = torso.z;
         rightArm.z = torso.z;
