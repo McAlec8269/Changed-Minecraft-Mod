@@ -9,13 +9,10 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 import static net.ltxprogrammer.changed.block.CardboardBoxTall.OPEN;
-import static net.minecraft.world.level.block.state.properties.BlockStateProperties.DOUBLE_BLOCK_HALF;
 
-public class CardboardBoxTallBlockEntity extends BlockEntity {
-    public LivingEntity entity;
+public class CardboardBoxTallBlockEntity extends BlockEntity implements SeatableBlockEntity {
     public SeatEntity entityHolder;
     public int ticksSinceChange = 20;
     public static final int OPEN_THRESHOLD = 15;
@@ -24,14 +21,26 @@ public class CardboardBoxTallBlockEntity extends BlockEntity {
         super(ChangedBlockEntities.CARDBOARD_BOX_TALL.get(), p_155229_, p_155230_);
     }
 
+    @Override
+    public SeatEntity getEntityHolder() {
+        return entityHolder;
+    }
+
+    @Override
+    public void setEntityHolder(SeatEntity entityHolder) {
+        this.entityHolder = entityHolder;
+    }
+
     public boolean hideEntity(LivingEntity entity) {
-        if (this.entity != null)
+        if (entityHolder == null || entityHolder.isRemoved()) {
+            entityHolder = SeatEntity.createFor(entity.level, this.getBlockState(), this.getBlockPos(), true);
+        }
+
+        if (this.getSeatedEntity() != null)
             return false;
         else if (entityHolder != null) {
-            if (!entityHolder.getPassengers().isEmpty())
-                return false;
-            this.entity = entity;
-            this.entity.startRiding(entityHolder);
+            if (!level.isClientSide)
+                entity.startRiding(entityHolder);
             ticksSinceChange = 0;
             return true;
         }
@@ -40,24 +49,20 @@ public class CardboardBoxTallBlockEntity extends BlockEntity {
     }
 
     public void forceOutEntity() {
+        final var entity = this.getSeatedEntity();
         if (entity != null && entity.vehicle == entityHolder) {
             entity.vehicle = null;
-            entity.setInvisible(false);
         }
     }
 
     public static void tick(Level level, BlockPos pos, BlockState state, CardboardBoxTallBlockEntity blockEntity) {
         blockEntity.ticksSinceChange++;
 
-        if (blockEntity.entityHolder == null) {
-            blockEntity.entityHolder = SeatEntity.createFor(level, state, pos, true);
-        }
+        final var entity = blockEntity.getSeatedEntity();
 
-        if (blockEntity.entity != null) {
-            if (blockEntity.entity.vehicle != blockEntity.entityHolder) {
-                if (blockEntity.entity.vehicle == null || !blockEntity.entity.vehicle.blockPosition().equals(blockEntity.entityHolder.blockPosition())) {
-                    blockEntity.entity.setInvisible(false);
-                    blockEntity.entity = null;
+        if (entity != null && blockEntity.entityHolder != null) {
+            if (entity.vehicle != blockEntity.entityHolder) {
+                if (entity.vehicle == null || !entity.vehicle.blockPosition().equals(blockEntity.entityHolder.blockPosition())) {
                     blockEntity.ticksSinceChange = 0;
                 }
             }
@@ -65,17 +70,21 @@ public class CardboardBoxTallBlockEntity extends BlockEntity {
 
         if (blockEntity.ticksSinceChange < OPEN_THRESHOLD) {
             if (!state.getValue(OPEN)) {
-                if (level.isClientSide)
-                    level.playLocalSound(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, ChangedSounds.BOW2, SoundSource.BLOCKS, 1.0f, 1.0f, true);
+                BlockState belowState = level.getBlockState(pos.below());
+
                 level.setBlock(pos, state.setValue(OPEN, true), 3);
-                level.setBlock(pos.below(), state.setValue(DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER).setValue(OPEN, true), 3);
+                if (belowState.is(state.getBlock()))
+                    level.setBlock(pos.below(), belowState.setValue(OPEN, true), 3);
             }
         }
 
         else {
             if (state.getValue(OPEN)) {
+                BlockState belowState = level.getBlockState(pos.below());
+
                 level.setBlock(pos, state.setValue(OPEN, false), 3);
-                level.setBlock(pos.below(), state.setValue(DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER).setValue(OPEN, false), 3);
+                if (belowState.is(state.getBlock()))
+                    level.setBlock(pos.below(), belowState.setValue(OPEN, false), 3);
             }
         }
     }

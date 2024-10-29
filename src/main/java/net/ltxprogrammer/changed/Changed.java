@@ -4,6 +4,7 @@ import net.ltxprogrammer.changed.client.ChangedClient;
 import net.ltxprogrammer.changed.client.EventHandlerClient;
 import net.ltxprogrammer.changed.client.RecipeCategories;
 import net.ltxprogrammer.changed.client.latexparticles.LatexParticleType;
+import net.ltxprogrammer.changed.data.BuiltinRepositorySource;
 import net.ltxprogrammer.changed.entity.HairStyle;
 import net.ltxprogrammer.changed.entity.PlayerMover;
 import net.ltxprogrammer.changed.init.*;
@@ -15,6 +16,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.ComposterBlock;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.AddPackFindersEvent;
+import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -54,6 +57,8 @@ public class Changed {
 
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::commonSetup);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::clientSetup);
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::customPacks);
+        MinecraftForge.EVENT_BUS.addListener(this::dataListeners);
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> this::registerClientEventListeners);
 
         PACKETS.registerPackets();
@@ -70,6 +75,7 @@ public class Changed {
         PlayerMover.REGISTRY.register(modEventBus);
         LatexParticleType.REGISTRY.register(modEventBus);
 
+        ChangedAttributes.REGISTRY.register(modEventBus);
         ChangedEnchantments.REGISTRY.register(modEventBus);
         ChangedRecipeSerializers.REGISTRY.register(modEventBus);
         ChangedStructureSets.REGISTRY.register(modEventBus);
@@ -82,6 +88,7 @@ public class Changed {
         ChangedFluids.REGISTRY.register(modEventBus);
         ChangedItems.REGISTRY.register(modEventBus);
         ChangedBlocks.REGISTRY.register(modEventBus);
+        ChangedTransfurVariants.REGISTRY.register(modEventBus);
         ChangedEntities.REGISTRY.register(modEventBus);
         //    ^^^ First to process ^^^
     }
@@ -109,6 +116,22 @@ public class Changed {
     private void clientSetup(final FMLClientSetupEvent event) {
         event.enqueueWork(RecipeCategories::registerCategories);
         ChangedClient.registerEventListeners();
+    }
+
+    private void dataListeners(final AddReloadListenerEvent event) {
+        event.addListener(ChangedFusions.INSTANCE);
+    }
+
+    private void customPacks(final AddPackFindersEvent event) {
+        try {
+            switch (event.getPackType()) {
+                case CLIENT_RESOURCES, SERVER_DATA ->
+                        event.addRepositorySource(new BuiltinRepositorySource(event.getPackType(), MODID));
+                default -> {}
+            }
+        } catch (Exception ex) {
+            LOGGER.error(ex);
+        }
     }
 
     private static <T> void addNetworkMessage(Class<T> messageType, BiConsumer<T, FriendlyByteBuf> encoder, Function<FriendlyByteBuf, T> decoder,

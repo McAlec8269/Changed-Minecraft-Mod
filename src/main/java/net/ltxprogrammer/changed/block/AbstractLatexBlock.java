@@ -1,11 +1,11 @@
 package net.ltxprogrammer.changed.block;
 
+import net.ltxprogrammer.changed.Changed;
 import net.ltxprogrammer.changed.entity.ChangedEntity;
 import net.ltxprogrammer.changed.entity.LatexType;
 import net.ltxprogrammer.changed.entity.variant.TransfurVariantInstance;
 import net.ltxprogrammer.changed.init.ChangedGameRules;
 import net.ltxprogrammer.changed.init.ChangedItems;
-import net.ltxprogrammer.changed.init.ChangedTags;
 import net.ltxprogrammer.changed.item.AbstractLatexItem;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.minecraft.core.BlockPos;
@@ -81,7 +81,7 @@ public abstract class AbstractLatexBlock extends Block implements NonLatexCovera
         if (latexType != LatexType.DARK_LATEX) return false;
 
         BlockState plant = plantable.getPlant(world, pos.relative(facing));
-        if (plant.getBlock() instanceof AbstractLatexCrystal)
+        if (plant.getBlock() instanceof TransfurCrystalBlock)
             return true;
         else
             return false;
@@ -160,7 +160,7 @@ public abstract class AbstractLatexBlock extends Block implements NonLatexCovera
 
         BlockState checkState = level.getBlockState(checkPos);
 
-        if (!checkState.is(ChangedTags.Blocks.LATEX_NON_REPLACEABLE) && checkState.getProperties().contains(COVERED) &&
+        if (Changed.config.server.canBlockBeCovered(checkState.getBlock()) && checkState.getProperties().contains(COVERED) &&
                 checkState.getValue(COVERED) != latexType) {
             if (checkPos.subtract(position).getY() > 0 && random.nextInt(3) > 0) // Reduced chance of spreading up
                 return;

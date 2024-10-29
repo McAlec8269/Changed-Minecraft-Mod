@@ -8,11 +8,11 @@ import javax.annotation.Nullable;
 
 public interface PlayerDataExtension {
     @Nullable
-    TransfurVariantInstance<?> getLatexVariant();
-    void setLatexVariant(@Nullable TransfurVariantInstance<?> variant);
+    TransfurVariantInstance<?> getTransfurVariant();
+    void setTransfurVariant(@Nullable TransfurVariantInstance<?> variant);
 
-    default boolean isLatex() {
-        return getLatexVariant() != null;
+    default boolean isTransfurred() {
+        return getTransfurVariant() != null;
     }
 
     @NotNull
@@ -34,6 +34,15 @@ public interface PlayerDataExtension {
             setPlayerMover(null);
         else if (existingMover == null || !existingMover.is(moverType))
             setPlayerMover(moverType.createInstance());
+    }
+
+    default boolean isPlayerMover(@Nullable PlayerMover<?> moverType) {
+        var existingMover = getPlayerMover();
+
+        if (moverType == null && existingMover == null)
+            return true;
+        else
+            return existingMover != null && existingMover.is(moverType);
     }
 
     BasicPlayerInfo getBasicPlayerInfo();

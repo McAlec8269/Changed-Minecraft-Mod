@@ -3,6 +3,7 @@ package net.ltxprogrammer.changed.entity.beast;
 import net.ltxprogrammer.changed.entity.LatexType;
 import net.ltxprogrammer.changed.entity.TransfurMode;
 import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
+import net.ltxprogrammer.changed.init.ChangedTransfurVariants;
 import net.ltxprogrammer.changed.util.Color3;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.Mth;
@@ -27,6 +28,15 @@ public class Shark extends AbstractAquaticEntity {
     }
 
     @Override
+    protected void setAttributes(AttributeMap attributes) {
+        super.setAttributes(attributes);
+        attributes.getInstance(Attributes.MAX_HEALTH).setBaseValue(10.0D);
+        attributes.getInstance(Attributes.MOVEMENT_SPEED).setBaseValue(1.2D);
+        attributes.getInstance(Attributes.ATTACK_DAMAGE).setBaseValue(3.0D);
+        attributes.getInstance(ForgeMod.SWIM_SPEED.get()).setBaseValue(2.4D);
+    }
+
+    @Override
     public TransfurMode getTransfurMode() {
         return TransfurMode.ABSORPTION;
     }
@@ -38,16 +48,7 @@ public class Shark extends AbstractAquaticEntity {
 
     @Override
     public TransfurVariant<?> getTransfurVariant() {
-        return this.level.getSeaLevel() - 6 > this.getBlockY() ? TransfurVariant.LATEX_MERMAID_SHARK.randomGender(this.random) : TransfurVariant.LATEX_SHARK;
-    }
-
-    @Override
-    protected void setAttributes(AttributeMap attributes) {
-        super.setAttributes(attributes);
-        attributes.getInstance(Attributes.MAX_HEALTH).setBaseValue(10.0D);
-        attributes.getInstance(Attributes.MOVEMENT_SPEED).setBaseValue(1.2D);
-        attributes.getInstance(Attributes.ATTACK_DAMAGE).setBaseValue(3.0D);
-        attributes.getInstance(ForgeMod.SWIM_SPEED.get()).setBaseValue(2.9D);
+        return this.level.getSeaLevel() - 6 > this.getBlockY() ? ChangedTransfurVariants.Gendered.LATEX_MERMAID_SHARKS.getRandomVariant(this.random) : ChangedTransfurVariants.LATEX_SHARK.get();
     }
 
     protected PathNavigation createNavigation(Level p_28362_) {
@@ -64,16 +65,6 @@ public class Shark extends AbstractAquaticEntity {
 
     public int getMaxHeadYRot() {
         return 1;
-    }
-
-    public void travel(@NotNull Vec3 vec) {
-        if (this.isEffectiveAi() && this.isInWater() && this.wantsToSwim()) {
-            this.moveRelative(0.01f, vec);
-            this.move(MoverType.SELF, this.getDeltaMovement());
-            this.setDeltaMovement(this.getDeltaMovement().scale(0.9D));
-        } else {
-            super.travel(vec);
-        }
     }
 
     public void tick() {

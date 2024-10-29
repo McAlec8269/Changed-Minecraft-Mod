@@ -1,14 +1,22 @@
 package net.ltxprogrammer.changed;
 
 import com.electronwill.nightconfig.core.file.CommentedFileConfig;
+import net.ltxprogrammer.changed.client.gui.TransfurProgressOverlay;
+import net.ltxprogrammer.changed.data.RegistryElementPredicate;
 import net.ltxprogrammer.changed.entity.BasicPlayerInfo;
+import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.world.level.block.Block;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ConfigTracker;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.loading.FMLPaths;
+import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraftforge.registries.ForgeRegistry;
+import net.minecraftforge.registries.GameData;
+import net.minecraftforge.server.ServerLifecycleHooks;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -18,6 +26,7 @@ import org.apache.logging.log4j.MarkerManager;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
 
 public class ChangedConfig {
     private interface AdditionalData {
@@ -50,6 +59,7 @@ public class ChangedConfig {
         public final ForgeConfigSpec.ConfigValue<Boolean> memCacheBaseImages;
         public final ForgeConfigSpec.ConfigValue<Boolean> generateUniqueTexturesForAllBlocks;
         public final ForgeConfigSpec.ConfigValue<Boolean> fastAndCheapLatexBlocks;
+        public final ForgeConfigSpec.ConfigValue<TransfurProgressOverlay.Position> transfurMeterPosition;
 
         public final BasicPlayerInfo basicPlayerInfo = new BasicPlayerInfo();
 
@@ -70,6 +80,8 @@ public class ChangedConfig {
             generateUniqueTexturesForAllBlocks = builder.define("generateUniqueTexturesForAllBlocks", true);
             builder.comment("Got a lot of mods? Unique model generation will be limited to minecraft and changed");
             fastAndCheapLatexBlocks = builder.define("fastAndCheapLatexBlocks", false);
+            builder.comment("Specify the location of the transfur meter");
+            transfurMeterPosition = builder.defineEnum("transfurMeterPosition", TransfurProgressOverlay.Position.BOTTOM_LEFT);
         }
 
         @Override
@@ -91,11 +103,42 @@ public class ChangedConfig {
     }
 
     public static class Server {
-        public final ForgeConfigSpec.ConfigValue<Double> transfurTolerance;
+        public final ForgeConfigSpec.ConfigValue<Boolean> showTFNametags;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> blacklistCoverBlocks;
+        public final ForgeConfigSpec.ConfigValue<List<? extends String>> whitelistCoverBlocks;
+        public final ForgeConfigSpec.ConfigValue<Boolean> playerControllingAbilities;
+        public final ForgeConfigSpec.ConfigValue<Boolean> isGrabEnabled;
+        public final ForgeConfigSpec.ConfigValue<Double> bpiSizeTolerance;
 
         public Server(ForgeConfigSpec.Builder builder) {
-            builder.comment("Replacing gamerule transfurTolerance, this config value acts like setting the max health of the player.");
-            transfurTolerance = builder.define("transfurTolerance", 20.0);
+            builder.comment("Should transfurred players have a nametag");
+            showTFNametags = builder.define("showTFNametags", true);
+            builder.comment("Blacklist any blocks from being covered. Acceptable formats: \"@modid\", \"#tag\", \"modid:block_id\"");
+            blacklistCoverBlocks = builder.defineList("blacklistCoverBlocks", List::of, RegistryElementPredicate::isValidSyntax);
+            builder.comment("Overrides any matches found in blacklistCoverBlocks. If the blacklist is empty, any blocks not in this list will not cover");
+            whitelistCoverBlocks = builder.defineList("whitelistCoverBlocks", List::of, RegistryElementPredicate::isValidSyntax);
+            builder.comment("Can latex abilities (hypno, siren) affect players.");
+            playerControllingAbilities = builder.define("playerControllingAbilities", true);
+            builder.comment("Can latexes use the grab ability on players.");
+            isGrabEnabled = builder.define("isGrabEnabled", true);
+            builder.comment("Acceptable model scaling through BPI (Default: +/- 5%)");
+            bpiSizeTolerance = builder.defineInRange("bpiSizeTolerance", 0.05, 0.01, 0.95);
+        }
+
+        public Stream<RegistryElementPredicate<Block>> getBlacklistedCoverBlocks() {
+            return blacklistCoverBlocks.get().stream().map(s -> RegistryElementPredicate.parseString(ForgeRegistries.BLOCKS, s));
+        }
+
+        public Stream<RegistryElementPredicate<Block>> getWhitelistedCoverBlocks() {
+            return whitelistCoverBlocks.get().stream().map(s -> RegistryElementPredicate.parseString(ForgeRegistries.BLOCKS, s));
+        }
+
+        public boolean canBlockBeCovered(Block block) {
+            if (!whitelistCoverBlocks.get().isEmpty() && getWhitelistedCoverBlocks().anyMatch(pred -> pred.test(block)))
+                return true;
+            if (!blacklistCoverBlocks.get().isEmpty() && getBlacklistedCoverBlocks().anyMatch(pred -> pred.test(block)))
+                return false;
+            return !blacklistCoverBlocks.get().isEmpty() || whitelistCoverBlocks.get().isEmpty();
         }
     }
 

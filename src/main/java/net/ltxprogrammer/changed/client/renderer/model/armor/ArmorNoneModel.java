@@ -9,7 +9,9 @@ import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.model.geom.builders.MeshDefinition;
+import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 
 public class ArmorNoneModel<T extends ChangedEntity> extends LatexHumanoidArmorModel<T, ArmorNoneModel<T>> {
@@ -18,7 +20,8 @@ public class ArmorNoneModel<T extends ChangedEntity> extends LatexHumanoidArmorM
 
     private final HumanoidAnimator<T, ArmorNoneModel<T>> animator;
 
-    public ArmorNoneModel(ModelPart root) {
+    public ArmorNoneModel(ModelPart modelPart, ArmorModel model) {
+        super(modelPart, model);
         this.animator = HumanoidAnimator.of(this);
     }
 
@@ -33,7 +36,23 @@ public class ArmorNoneModel<T extends ChangedEntity> extends LatexHumanoidArmorM
     }
 
     @Override
-    public void renderForSlot(T entity, ItemStack stack, EquipmentSlot slot, PoseStack poseStack, VertexConsumer buffer, int packedLight, int packedOverlay, float red, float green, float blue, float alpha) {
+    public void renderForSlot(T entity, RenderLayerParent<T, ?> parent, ItemStack stack, EquipmentSlot slot, PoseStack poseStack, VertexConsumer buffer, int packedLight, int packedOverlay, float red, float green, float blue, float alpha) {
         // NOOP
+    }
+
+    public ModelPart getArm(HumanoidArm arm) {
+        return null;
+    }
+
+    public ModelPart getLeg(HumanoidArm leg) {
+        return null;
+    }
+
+    public ModelPart getHead() {
+        return NULL_PART;
+    }
+
+    public ModelPart getTorso() {
+        return NULL_PART;
     }
 }

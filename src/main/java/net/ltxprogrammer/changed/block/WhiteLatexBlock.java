@@ -3,10 +3,7 @@ package net.ltxprogrammer.changed.block;
 import net.ltxprogrammer.changed.entity.LatexType;
 import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.entity.variant.TransfurVariantInstance;
-import net.ltxprogrammer.changed.init.ChangedBlocks;
-import net.ltxprogrammer.changed.init.ChangedEntities;
-import net.ltxprogrammer.changed.init.ChangedGameRules;
-import net.ltxprogrammer.changed.init.ChangedItems;
+import net.ltxprogrammer.changed.init.*;
 import net.ltxprogrammer.changed.item.AbstractLatexItem;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.minecraft.core.BlockPos;
@@ -115,18 +112,18 @@ public class WhiteLatexBlock extends AbstractLatexBlock implements WhiteLatexTra
                 return;
             }
 
-            if (!TransfurVariant.getFusionCompatible(TransfurVariant.WHITE_LATEX_WOLF, livingEntity.getClass()).isEmpty()) {
+            if (ChangedFusions.INSTANCE.getFusionsFor(ChangedTransfurVariants.PURE_WHITE_LATEX_WOLF.get(), livingEntity.getClass()).findAny().isPresent()) {
                 isTargetNearby.set(true);
                 return;
             }
 
             var latexVariant = TransfurVariant.getEntityVariant(livingEntity);
-            if (latexVariant != null && !TransfurVariant.getFusionCompatible(TransfurVariant.WHITE_LATEX_WOLF, latexVariant).isEmpty()) {
+            if (latexVariant != null && ChangedFusions.INSTANCE.getFusionsFor(ChangedTransfurVariants.PURE_WHITE_LATEX_WOLF.get(), latexVariant).findAny().isPresent()) {
                 isTargetNearby.set(true);
                 return;
             }
 
-            if (livingEntity instanceof Player player && !player.isSpectator() && !ProcessTransfur.isPlayerLatex(player)) {
+            if (livingEntity instanceof Player player && !player.isSpectator() && !ProcessTransfur.isPlayerTransfurred(player)) {
                 isTargetNearby.set(true);
                 return;
             }
@@ -144,7 +141,7 @@ public class WhiteLatexBlock extends AbstractLatexBlock implements WhiteLatexTra
 
         BlockPos above = position.above();
         if (level.getBlockState(above).is(Blocks.AIR) && level.getBlockState(above.above()).is(Blocks.AIR)) {
-            ChangedEntities.PURE_WHITE_GOO_WOLF.get().spawn(level, null, null, null, above, MobSpawnType.NATURAL, true, true);
+            ChangedEntities.PURE_WHITE_LATEX_WOLF.get().spawn(level, null, null, null, above, MobSpawnType.NATURAL, true, true);
         }
     }
 

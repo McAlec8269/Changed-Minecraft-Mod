@@ -1,6 +1,11 @@
 package net.ltxprogrammer.changed.mixin.entity;
 
+import net.ltxprogrammer.changed.ability.AbstractAbility;
+import net.ltxprogrammer.changed.ability.GrabEntityAbilityInstance;
 import net.ltxprogrammer.changed.entity.ChangedEntity;
+import net.ltxprogrammer.changed.entity.LivingEntityDataExtension;
+import net.ltxprogrammer.changed.entity.SeatEntity;
+import net.ltxprogrammer.changed.init.ChangedAbilities;
 import net.ltxprogrammer.changed.init.ChangedTags;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.EntityUtil;
@@ -93,7 +98,7 @@ public abstract class EntityMixin extends net.minecraftforge.common.capabilities
     @Inject(method = "getEyePosition()Lnet/minecraft/world/phys/Vec3;", at = @At("HEAD"), cancellable = true)
     public final void getEyePosition(CallbackInfoReturnable<Vec3> callback) {
         ProcessTransfur.ifPlayerTransfurred(EntityUtil.playerOrNull(asEntity()), (player, variant) -> {
-            float z = variant.getParent().cameraZOffset;
+            float z = Mth.lerp(variant.getMorphProgression(), 0.0f, variant.getParent().cameraZOffset);
             var vec = new Vec3(player.getX(), player.getEyeY(), player.getZ());
             var look = player.getLookAngle().multiply(1.0, 0.0, 1.0).normalize();
             if (Math.abs(look.x()) < 0.0001f && Math.abs(look.z()) < 0.0001f)
@@ -105,7 +110,7 @@ public abstract class EntityMixin extends net.minecraftforge.common.capabilities
     @Inject(method = "getEyePosition(F)Lnet/minecraft/world/phys/Vec3;", at = @At("HEAD"), cancellable = true)
     public final void getEyePosition(float v, CallbackInfoReturnable<Vec3> callback) {
         ProcessTransfur.ifPlayerTransfurred(EntityUtil.playerOrNull(asEntity()), (player, variant) -> {
-            float z = variant.getParent().cameraZOffset;
+            float z = Mth.lerp(variant.getMorphProgression(), 0.0f, variant.getParent().cameraZOffset);
             if (Math.abs(z) < 0.0001f) return;
             var look = player.getLookAngle().multiply(1.0, 0.0, 1.0).normalize();
             if (Math.abs(look.x()) < 0.0001f && Math.abs(look.z()) < 0.0001f)
@@ -120,7 +125,7 @@ public abstract class EntityMixin extends net.minecraftforge.common.capabilities
 
     @Inject(method = "isInWall", at = @At("HEAD"), cancellable = true)
     public void isInWall(CallbackInfoReturnable<Boolean> callback) {
-        if (asEntity() instanceof Player player && ProcessTransfur.isPlayerLatex(player)) {
+        if (asEntity() instanceof Player player && ProcessTransfur.isPlayerTransfurred(player)) {
             if (player.noPhysics) {
                 callback.setReturnValue(false);
             } else {
@@ -152,5 +157,26 @@ public abstract class EntityMixin extends net.minecraftforge.common.capabilities
     protected void updateInWaterStateAndDoFluidPushing(CallbackInfoReturnable<Boolean> callback) {
         if (this.updateFluidHeightAndDoFluidPushing(ChangedTags.Fluids.LATEX, 0.007D))
             callback.setReturnValue(true);
+    }
+
+    @Inject(method = "isInvisible", at = @At("RETURN"), cancellable = true)
+    public void hideSeatedEntity(CallbackInfoReturnable<Boolean> cir) {
+        if (!cir.getReturnValue() && (Entity)(Object)this instanceof LivingEntity livingEntity) {
+            if (livingEntity.vehicle != null && livingEntity.vehicle instanceof SeatEntity seat) {
+                if (seat.shouldSeatedBeInvisible()) {
+                    cir.setReturnValue(true);
+                }
+            }
+        }
+
+        if (this instanceof LivingEntityDataExtension ext) {
+            boolean shouldRender = AbstractAbility.getAbilityInstanceSafe(ext.getGrabbedBy(), ChangedAbilities.GRAB_ENTITY_ABILITY.get())
+                    .map(ability -> !(ability.suited && !ability.grabbedHasControl))
+                    .orElse(true);
+
+            if (!shouldRender) {
+                cir.setReturnValue(true);
+            }
+        }
     }
 }

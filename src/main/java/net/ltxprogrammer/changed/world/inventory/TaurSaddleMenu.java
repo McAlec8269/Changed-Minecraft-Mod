@@ -117,15 +117,13 @@ public class TaurSaddleMenu extends AbstractContainerMenu implements Supplier<Ma
         if (ability == null)
             return;
 
-        if (ability.saddle != null)
-            internal.insertItem(0, ability.saddle, false);
-        if (ability.chest != null)
-            internal.insertItem(1, ability.chest, false);
+        internal.insertItem(0, ability.saddle, false);
+        internal.insertItem(1, ability.chest, false);
     }
 
     @Override
     public boolean stillValid(Player player) {
-        return ProcessTransfur.isPlayerLatex(player);
+        return ProcessTransfur.isPlayerTransfurred(player);
     }
 
     @Override

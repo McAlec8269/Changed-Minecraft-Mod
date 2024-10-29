@@ -5,19 +5,24 @@ import com.mojang.math.Vector3f;
 import net.ltxprogrammer.changed.client.renderer.layers.*;
 import net.ltxprogrammer.changed.client.renderer.model.AdvancedHumanoidModel;
 import net.ltxprogrammer.changed.client.renderer.model.AdvancedHumanoidModelInterface;
+import net.ltxprogrammer.changed.client.renderer.model.armor.ArmorModel;
 import net.ltxprogrammer.changed.client.renderer.model.armor.LatexHumanoidArmorModel;
 import net.ltxprogrammer.changed.entity.BasicPlayerInfo;
 import net.ltxprogrammer.changed.entity.ChangedEntity;
+import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelLayerLocation;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.MobRenderer;
 import net.minecraft.client.renderer.entity.layers.CustomHeadLayer;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -26,6 +31,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -33,13 +39,21 @@ public abstract class AdvancedHumanoidRenderer<T extends ChangedEntity, M extend
     @Nullable
     private LatexHumanoidHairLayer<T, M> hairLayer;
 
+    private LatexHumanoidArmorLayer<T, M, A> armorLayer;
+
     public @Nullable LatexHumanoidHairLayer<T, M> getHairLayer() {
         return hairLayer;
+    }
+
+    public LatexHumanoidArmorLayer<T, M, A> getArmorLayer() {
+        return armorLayer;
     }
 
     private void addLayers(EntityRendererProvider.Context context, M main) {
         /*if (Changed.config.client.useNewModels.get())
             hairLayer = new LatexHumanoidHairLayer<>(this, context.getModelSet());*/
+        if (armorLayer != null)
+            this.addLayer(armorLayer);
         this.addLayer(new LatexItemInHandLayer<>(this));
         if (hairLayer != null)
             this.addLayer(hairLayer);
@@ -66,21 +80,21 @@ public abstract class AdvancedHumanoidRenderer<T extends ChangedEntity, M extend
     }
 
     public AdvancedHumanoidRenderer(EntityRendererProvider.Context context, M main,
-                                    Function<ModelPart, A> ctorA, ModelLayerLocation armorInner, ModelLayerLocation armorOuter, float shadowSize) {
+                                    BiFunction<ModelPart, ArmorModel, A> ctorA, ModelLayerLocation armorInner, ModelLayerLocation armorOuter, float shadowSize) {
         super(context, main, shadowSize);
         if (main == null) return;
-        this.addLayer(new LatexHumanoidArmorLayer<>(this, ctorA.apply(context.bakeLayer(armorInner)), ctorA.apply(context.bakeLayer(armorOuter))));
+        this.armorLayer = new LatexHumanoidArmorLayer<>(this, ctorA.apply(context.bakeLayer(armorInner), ArmorModel.INNER), ctorA.apply(context.bakeLayer(armorOuter), ArmorModel.OUTER));
         this.addLayers(context, main);
     }
 
     public <B extends LatexHumanoidArmorModel<T, ?>> AdvancedHumanoidRenderer(EntityRendererProvider.Context context, M main,
-                                                                              Function<ModelPart, A> ctorA, ModelLayerLocation armorInner, ModelLayerLocation armorOuter,
-                                                                              Function<ModelPart, B> ctorB, ModelLayerLocation armorInnerOther, ModelLayerLocation armorOuterOther,
+                                                                              BiFunction<ModelPart, ArmorModel, A> ctorA, ModelLayerLocation armorInner, ModelLayerLocation armorOuter,
+                                                                              BiFunction<ModelPart, ArmorModel, B> ctorB, ModelLayerLocation armorInnerOther, ModelLayerLocation armorOuterOther,
                                                                               Predicate<EquipmentSlot> useOther, Predicate<EquipmentSlot> useInner, float shadowSize) {
         super(context, main, shadowSize);
         if (main == null) return;
-        this.addLayer(new LatexHumanoidSplitArmorLayer<>(this, ctorA.apply(context.bakeLayer(armorInner)), ctorA.apply(context.bakeLayer(armorOuter)),
-                ctorB.apply(context.bakeLayer(armorInnerOther)), ctorB.apply(context.bakeLayer(armorOuterOther)), useOther, useInner));
+        this.armorLayer = new LatexHumanoidSplitArmorLayer<>(this, ctorA.apply(context.bakeLayer(armorInner), ArmorModel.INNER), ctorA.apply(context.bakeLayer(armorOuter), ArmorModel.OUTER),
+                ctorB.apply(context.bakeLayer(armorInnerOther), ArmorModel.INNER), ctorB.apply(context.bakeLayer(armorOuterOther), ArmorModel.OUTER), useOther, useInner);
         this.addLayers(context, main);
     }
 
@@ -89,7 +103,7 @@ public abstract class AdvancedHumanoidRenderer<T extends ChangedEntity, M extend
     }
 
     protected void scaleForBPI(BasicPlayerInfo bpi, PoseStack poseStack) {
-        float forcedLimit = Mth.clamp(bpi.getSize(), 1.0f - BasicPlayerInfo.SIZE_TOLERANCE, 1.05f + BasicPlayerInfo.SIZE_TOLERANCE);
+        float forcedLimit = Mth.clamp(bpi.getSize(), 1.0f - BasicPlayerInfo.getSizeTolerance(), 1.05f + BasicPlayerInfo.getSizeTolerance());
         poseStack.scale(forcedLimit, forcedLimit, forcedLimit);
     }
 
@@ -188,5 +202,10 @@ public abstract class AdvancedHumanoidRenderer<T extends ChangedEntity, M extend
 
     public boolean shouldRenderArmor(T entity) {
         return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    public void wrapLayer(RenderLayer<?, ?> layer) {
+        this.addLayer(new PlayerLayerWrapper<>(this, (RenderLayer<? super Player, PlayerModel<? super Player>>) layer));
     }
 }

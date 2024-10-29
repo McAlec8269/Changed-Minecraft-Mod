@@ -100,7 +100,7 @@ public class Syringe extends Item implements SpecializedAnimations {
             }
         }
 
-        return TransfurVariant.FALLBACK_VARIANT;
+        return ChangedTransfurVariants.FALLBACK_VARIANT.get();
     }
 
     @Override
@@ -111,7 +111,7 @@ public class Syringe extends Item implements SpecializedAnimations {
     public @NotNull ItemStack usedOnPlayer(@NotNull ItemStack stack, @NotNull Level level, @NotNull Player player, @NotNull Player sourcePlayer, boolean ignoreMovement) {
         if (!ignoreMovement && player.getDeltaMovement().lengthSqr() > 0.01f)
             return stack;
-        if (!ProcessTransfur.isPlayerOrganic(player) && player != sourcePlayer)
+        if (ProcessTransfur.isPlayerLatex(player) && player != sourcePlayer)
             return stack;
 
         player.hurt(ChangedDamageSources.BLOODLOSS, 1.0f);
@@ -125,19 +125,21 @@ public class Syringe extends Item implements SpecializedAnimations {
 
         ProcessTransfur.ifPlayerTransfurred(player, variant -> {
             ResourceLocation form = variant.getFormId();
-            if (TransfurVariant.SPECIAL_LATEX_FORMS.contains(form))
+            if (TransfurVariant.getPublicTransfurVariants().noneMatch(variant.getParent()::equals))
                 form = TransfurVariant.SPECIAL_LATEX;
             ItemStack nStack = new ItemStack(ChangedItems.LATEX_SYRINGE.get());
             tag.putBoolean("safe", Pale.isCured(player));
             tag.putString("form", form.toString());
             nStack.setTag(tag);
 
-            player.getInventory().add(nStack);
+            if (!player.addItem(nStack))
+                player.drop(nStack, false);
         }, () -> {
             ItemStack nStack = new ItemStack(ChangedItems.BLOOD_SYRINGE.get());
             nStack.setTag(tag);
 
-            player.getInventory().add(nStack);
+            if (!player.addItem(nStack))
+                player.drop(nStack, false);
         });
         return stack;
     }

@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.ltxprogrammer.changed.Changed;
 import net.ltxprogrammer.changed.client.renderer.model.AdvancedHumanoidModel;
+import net.ltxprogrammer.changed.client.renderer.model.AdvancedHumanoidModelInterface;
 import net.ltxprogrammer.changed.entity.BasicPlayerInfo;
 import net.ltxprogrammer.changed.entity.ChangedEntity;
 import net.ltxprogrammer.changed.extension.ChangedCompatibility;
@@ -28,8 +29,8 @@ import java.util.function.BiFunction;
 
 public class CustomEyesLayer<M extends AdvancedHumanoidModel<T>, T extends ChangedEntity> extends RenderLayer<T, M> {
     public enum HeadShape implements StringRepresentable {
-        NORMAL("normal", 0, 0, -4, -8, -4, 8, 8, 8),
-        PUP("pup", 2, 2, -4, -4, -6, 8, 8, 6);
+        NORMAL("normal", 0, 0, -4, -8, -4, 8, 8, 8, new CubeDeformation(0.0025f)),
+        PUP("pup", 2, 2, -4, -4, -6, 8, 8, 6, new CubeDeformation(0.0025f));
         final String serializedName;
         final int texX, texY;
         final int x, y, z, width, height, depth;
@@ -113,6 +114,7 @@ public class CustomEyesLayer<M extends AdvancedHumanoidModel<T>, T extends Chang
     private final ColorFunction<T> irisColorLeftFn;
     private final ColorFunction<T> irisColorRightFn;
     private final ColorFunction<T> eyeBrowsColorFn;
+    private final ColorFunction<T> eyeLashesColorFn;
 
     private HeadShape headShape = HeadShape.NORMAL;
 
@@ -181,16 +183,23 @@ public class CustomEyesLayer<M extends AdvancedHumanoidModel<T>, T extends Chang
         this(parent, modelSet, CustomEyesLayer::scleraColor, CustomEyesLayer::irisColorLeft, CustomEyesLayer::irisColorRight, CustomEyesLayer::noRender);
     }
 
+    @Deprecated
     public CustomEyesLayer(RenderLayerParent<T, M> parent, EntityModelSet modelSet, ColorFunction<T> scleraColorFn, ColorFunction<T> irisColorDualFn) {
         this(parent, modelSet, scleraColorFn, irisColorDualFn, irisColorDualFn);
     }
 
+    @Deprecated
     public CustomEyesLayer(RenderLayerParent<T, M> parent, EntityModelSet modelSet, ColorFunction<T> scleraColorFn, ColorFunction<T> irisColorLeftFn, ColorFunction<T> irisColorRightFn) {
         this(parent, modelSet, scleraColorFn, irisColorLeftFn, irisColorRightFn, CustomEyesLayer::noRender);
     }
 
+    @Deprecated
+    public CustomEyesLayer(RenderLayerParent<T, M> parent, EntityModelSet modelSet, ColorFunction<T> scleraColorFn, ColorFunction<T> irisColorLeftFn, ColorFunction<T> irisColorRightFn, ColorFunction<T> eyeBrowsColorFn) {
+        this(parent, modelSet, scleraColorFn, irisColorLeftFn, irisColorRightFn, eyeBrowsColorFn, CustomEyesLayer::noRender);
+    }
+
     public CustomEyesLayer(RenderLayerParent<T, M> parent, EntityModelSet modelSet,
-                           ColorFunction<T> scleraColorFn, ColorFunction<T> irisColorLeftFn, ColorFunction<T> irisColorRightFn, ColorFunction<T> eyeBrowsColorFn) {
+                           ColorFunction<T> scleraColorFn, ColorFunction<T> irisColorLeftFn, ColorFunction<T> irisColorRightFn, ColorFunction<T> eyeBrowsColorFn, ColorFunction<T> eyeLashesColorFn) {
         super(parent);
         var root = modelSet.bakeLayer(HEAD);
         this.shapedHeads = new EnumMap<>(HeadShape.class);
@@ -201,6 +210,7 @@ public class CustomEyesLayer<M extends AdvancedHumanoidModel<T>, T extends Chang
         this.irisColorLeftFn = irisColorLeftFn;
         this.irisColorRightFn = irisColorRightFn;
         this.eyeBrowsColorFn = eyeBrowsColorFn;
+        this.eyeLashesColorFn = eyeLashesColorFn;
     }
 
     public static LayerDefinition createHead() {
@@ -236,6 +246,10 @@ public class CustomEyesLayer<M extends AdvancedHumanoidModel<T>, T extends Chang
 
         this.shapedHeads.get(headShape).copyFrom(this.getParentModel().getHead());
 
+        pose.pushPose();
+        if (this.getParentModel() instanceof AdvancedHumanoidModelInterface<?,?> modelInterface)
+            modelInterface.scaleForHead(pose);
+
         scleraColorFn.getColorSafe(entity, info).ifPresent(data -> {
             renderHead(pose, bufferSource.getBuffer(data.getRenderType(style.getSclera())), packedLight, overlay, data.color, data.alpha);
         });
@@ -248,5 +262,119 @@ public class CustomEyesLayer<M extends AdvancedHumanoidModel<T>, T extends Chang
         eyeBrowsColorFn.getColorSafe(entity, info).ifPresent(data -> {
             renderHead(pose, bufferSource.getBuffer(data.getRenderType(style.getEyeBrows())), packedLight, overlay, data.color, data.alpha);
         });
+        eyeLashesColorFn.getColorSafe(entity, info).ifPresent(data -> {
+            renderHead(pose, bufferSource.getBuffer(data.getRenderType(style.getEyeLashes())), packedLight, overlay, data.color, data.alpha);
+        });
+
+        pose.popPose();
+    }
+
+    public static class Builder<M extends AdvancedHumanoidModel<T>, T extends ChangedEntity> {
+        private final RenderLayerParent<T, M> parent;
+        private final EntityModelSet modelSet;
+
+        private ColorFunction<T> scleraColorFn;
+        private ColorFunction<T> irisColorLeftFn;
+        private ColorFunction<T> irisColorRightFn;
+        private ColorFunction<T> eyeBrowsColorFn;
+        private ColorFunction<T> eyeLashesColorFn;
+
+        public Builder(RenderLayerParent<T, M> parent, EntityModelSet modelSet) {
+            this.parent = parent;
+            this.modelSet = modelSet;
+
+            this.scleraColorFn = CustomEyesLayer::scleraColor;
+            this.irisColorLeftFn = CustomEyesLayer::irisColorLeft;
+            this.irisColorRightFn = CustomEyesLayer::irisColorRight;
+            this.eyeBrowsColorFn = CustomEyesLayer::noRender;
+            this.eyeLashesColorFn = CustomEyesLayer::noRender;
+        }
+
+        public Builder<M, T> withSclera(Color3 fixedColor) {
+            this.scleraColorFn = fixedColor(fixedColor);
+            return this;
+        }
+
+        public Builder<M, T> withSclera(ColorFunction<T> colorFn) {
+            this.scleraColorFn = colorFn;
+            return this;
+        }
+
+        public Builder<M, T> withIris(Color3 dualFixedColor) {
+            this.irisColorLeftFn = fixedColor(dualFixedColor);
+            this.irisColorRightFn = this.irisColorLeftFn;
+            return this;
+        }
+
+        public Builder<M, T> withIris(ColorFunction<T> dualColorFn) {
+            this.irisColorLeftFn = dualColorFn;
+            this.irisColorRightFn = dualColorFn;
+            return this;
+        }
+
+        public Builder<M, T> withIris(Color3 leftFixedColor, Color3 rightFixedColor) {
+            this.irisColorLeftFn = fixedColor(leftFixedColor);
+            this.irisColorRightFn = fixedColor(rightFixedColor);
+            return this;
+        }
+
+        public Builder<M, T> withIris(ColorFunction<T> leftColorFn, ColorFunction<T> rightColorFn) {
+            this.irisColorLeftFn = leftColorFn;
+            this.irisColorRightFn = rightColorFn;
+            return this;
+        }
+
+        public Builder<M, T> withLeftIris(Color3 fixedColor) {
+            this.irisColorLeftFn = fixedColor(fixedColor);
+            return this;
+        }
+
+        public Builder<M, T> withLeftIris(ColorFunction<T> colorFn) {
+            this.irisColorLeftFn = colorFn;
+            return this;
+        }
+
+        public Builder<M, T> withRightIris(Color3 fixedColor) {
+            this.irisColorRightFn = fixedColor(fixedColor);
+            return this;
+        }
+
+        public Builder<M, T> withRightIris(ColorFunction<T> colorFn) {
+            this.irisColorRightFn = colorFn;
+            return this;
+        }
+
+        public Builder<M, T> withEyebrows(Color3 fixedColor) {
+            this.eyeBrowsColorFn = fixedColor(fixedColor);
+            return this;
+        }
+
+        public Builder<M, T> withEyebrows(ColorFunction<T> colorFn) {
+            this.eyeBrowsColorFn = colorFn;
+            return this;
+        }
+
+        public Builder<M, T> withEyelashes(Color3 fixedColor) {
+            this.eyeLashesColorFn = fixedColor(fixedColor);
+            return this;
+        }
+
+        public Builder<M, T> withEyelashes(ColorFunction<T> colorFn) {
+            this.eyeLashesColorFn = colorFn;
+            return this;
+        }
+
+        public CustomEyesLayer<M, T> build() {
+            return new CustomEyesLayer<>(parent, modelSet,
+                    scleraColorFn,
+                    irisColorLeftFn,
+                    irisColorRightFn,
+                    eyeBrowsColorFn,
+                    eyeLashesColorFn);
+        }
+    }
+
+    public static <M extends AdvancedHumanoidModel<T>, T extends ChangedEntity> Builder<M, T> builder(RenderLayerParent<T, M> parent, EntityModelSet modelSet) {
+        return new Builder<>(parent, modelSet);
     }
 }

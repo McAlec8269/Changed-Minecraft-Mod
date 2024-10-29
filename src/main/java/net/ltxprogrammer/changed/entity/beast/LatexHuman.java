@@ -3,11 +3,9 @@ package net.ltxprogrammer.changed.entity.beast;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.minecraft.MinecraftProfileTexture;
 import net.ltxprogrammer.changed.ability.IAbstractChangedEntity;
-import net.ltxprogrammer.changed.entity.ChangedEntity;
-import net.ltxprogrammer.changed.entity.HairStyle;
-import net.ltxprogrammer.changed.entity.LatexType;
-import net.ltxprogrammer.changed.entity.TransfurMode;
+import net.ltxprogrammer.changed.entity.*;
 import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
+import net.ltxprogrammer.changed.init.ChangedTransfurVariants;
 import net.ltxprogrammer.changed.util.Color3;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
@@ -18,6 +16,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.ai.attributes.AttributeMap;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
@@ -27,7 +26,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public class LatexHuman extends ChangedEntity {
+public class LatexHuman extends ChangedEntity implements ComplexRenderer {
     protected static final EntityDataAccessor<Optional<UUID>> DATA_PLAYER = SynchedEntityData.defineId(LatexHuman.class, EntityDataSerializers.OPTIONAL_UUID);
 
     public LatexHuman(EntityType<? extends LatexHuman> p_19870_, Level p_19871_) {
@@ -170,7 +169,7 @@ public class LatexHuman extends ChangedEntity {
         super.onReplicateOther(other, variant);
         //if (this.getUUID() != this.getRepresentUUID()) return;
 
-        if (variant == TransfurVariant.LATEX_HUMAN) {
+        if (variant.is(ChangedTransfurVariants.LATEX_HUMAN)) {
             if (other.getChangedEntity() instanceof LatexHuman human) {
                 human.setRepresentPlayer(this.getRepresentUUID());
             }
@@ -192,5 +191,11 @@ public class LatexHuman extends ChangedEntity {
         if (tag.contains("RepresentPlayer")) {
             this.entityData.set(DATA_PLAYER, Optional.of(tag.getUUID("RepresentPlayer")));
         }
+    }
+
+    @Override
+    protected void setAttributes(AttributeMap attributes) {
+        super.setAttributes(attributes);
+        AttributePresets.playerLike(attributes);
     }
 }

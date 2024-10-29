@@ -2,9 +2,9 @@ package net.ltxprogrammer.changed.entity.projectile;
 
 import net.ltxprogrammer.changed.entity.TransfurCause;
 import net.ltxprogrammer.changed.entity.TransfurContext;
-import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.init.ChangedEntities;
 import net.ltxprogrammer.changed.init.ChangedItems;
+import net.ltxprogrammer.changed.init.ChangedTransfurVariants;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.minecraft.core.particles.ItemParticleOption;
 import net.minecraft.core.particles.ParticleOptions;
@@ -24,11 +24,11 @@ public class LatexInkball extends ThrowableItemProjectile {
     }
 
     public LatexInkball(Level level, LivingEntity livingEntity) {
-        super(ChangedEntities.GOO_INKBALL.get(), livingEntity, level);
+        super(ChangedEntities.LATEX_INKBALL.get(), livingEntity, level);
     }
 
     public LatexInkball(Level p_37394_, double p_37395_, double p_37396_, double p_37397_) {
-        super(ChangedEntities.GOO_INKBALL.get(), p_37395_, p_37396_, p_37397_, p_37394_);
+        super(ChangedEntities.LATEX_INKBALL.get(), p_37395_, p_37396_, p_37397_, p_37394_);
     }
 
     protected Item getDefaultItem() {
@@ -57,7 +57,7 @@ public class LatexInkball extends ThrowableItemProjectile {
             return;
 
         ProcessTransfur.progressTransfur(livingEntity, 6.0f,
-                TransfurVariant.LATEX_SQUID_DOG.randomGender(hitResult.getEntity().level.random), TransfurContext.hazard(TransfurCause.SQUID_DOG_INKBALL));
+                ChangedTransfurVariants.Gendered.LATEX_SQUID_DOGS.getRandomVariant(hitResult.getEntity().level.random), TransfurContext.hazard(TransfurCause.SQUID_DOG_INKBALL));
     }
 
     protected void onHit(HitResult hitResult) {

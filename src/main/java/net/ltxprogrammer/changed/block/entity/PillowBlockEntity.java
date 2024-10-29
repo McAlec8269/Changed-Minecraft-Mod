@@ -10,8 +10,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-public class PillowBlockEntity extends BlockEntity {
-    public LivingEntity entity;
+public class PillowBlockEntity extends BlockEntity implements SeatableBlockEntity {
     public SeatEntity entityHolder;
     private DyeColor color;
 
@@ -20,14 +19,26 @@ public class PillowBlockEntity extends BlockEntity {
         this.color = ((Pillow)this.getBlockState().getBlock()).getColor();
     }
 
+    @Override
+    public SeatEntity getEntityHolder() {
+        return entityHolder;
+    }
+
+    @Override
+    public void setEntityHolder(SeatEntity entityHolder) {
+        this.entityHolder = entityHolder;
+    }
+
     public boolean sitEntity(LivingEntity entity) {
-        if (this.entity != null)
+        if (entityHolder == null || entityHolder.isRemoved()) {
+            entityHolder = SeatEntity.createFor(entity.level, this.getBlockState(), this.getBlockPos(), false);
+        }
+
+        if (this.getSeatedEntity() != null)
             return false;
         else if (entityHolder != null) {
-            if (!entityHolder.getPassengers().isEmpty())
-                return false;
-            this.entity = entity;
-            this.entity.startRiding(entityHolder);
+            if (!level.isClientSide)
+                entity.startRiding(entityHolder);
             return true;
         }
 
@@ -35,6 +46,7 @@ public class PillowBlockEntity extends BlockEntity {
     }
 
     public void forceOutEntity() {
+        final var entity = this.getSeatedEntity();
         if (entity != null && entity.vehicle == entityHolder) {
             entity.vehicle = null;
         }
@@ -48,17 +60,5 @@ public class PillowBlockEntity extends BlockEntity {
         return color;
     }
 
-    public static void tick(Level level, BlockPos pos, BlockState state, PillowBlockEntity blockEntity) {
-        if (blockEntity.entityHolder == null) {
-            blockEntity.entityHolder = SeatEntity.createFor(level, state, pos, false);
-        }
-
-        if (blockEntity.entity != null) {
-            if (blockEntity.entity.vehicle != blockEntity.entityHolder) {
-                if (blockEntity.entity.vehicle == null || !blockEntity.entity.vehicle.blockPosition().equals(blockEntity.entityHolder.blockPosition())) {
-                    blockEntity.entity = null;
-                }
-            }
-        }
-    }
+    public static void tick(Level level, BlockPos pos, BlockState state, PillowBlockEntity blockEntity) {}
 }

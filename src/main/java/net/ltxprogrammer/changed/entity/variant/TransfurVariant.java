@@ -6,53 +6,51 @@ import com.google.gson.JsonObject;
 import com.mojang.datafixers.util.Pair;
 import net.ltxprogrammer.changed.Changed;
 import net.ltxprogrammer.changed.ability.AbstractAbility;
+import net.ltxprogrammer.changed.ability.IAbstractChangedEntity;
 import net.ltxprogrammer.changed.entity.*;
 import net.ltxprogrammer.changed.entity.beast.*;
 import net.ltxprogrammer.changed.init.*;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.Color3;
 import net.ltxprogrammer.changed.util.EntityUtil;
-import net.ltxprogrammer.changed.util.PatreonBenefits;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.GsonHelper;
 import net.minecraft.world.entity.*;
-import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.RegistryEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.registries.ForgeRegistryEntry;
 import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
-import java.security.InvalidParameterException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-@Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.MOD)
 public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry<TransfurVariant<?>> {
     public static final String NBT_PLAYER_ID = "changed:player_id";
     public static final ResourceLocation SPECIAL_LATEX = Changed.modResource("form_special");
-    private static final Map<ResourceLocation, TransfurVariant<?>> ALL_LATEX_FORMS = new HashMap<>();
-    public static final List<ResourceLocation> PUBLIC_LATEX_FORMS = new ArrayList<>();
-    public static final List<ResourceLocation> FUSION_LATEX_FORMS = new ArrayList<>();
-    public static final List<ResourceLocation> MOB_FUSION_LATEX_FORMS = new ArrayList<>();
-    public static final List<ResourceLocation> SPECIAL_LATEX_FORMS = new ArrayList<>();
-    public static final EnumMap<LatexType, List<ResourceLocation>> VARIANTS_BY_TYPE = new EnumMap<>(LatexType.class);
+    private static final List<ResourceLocation> SPECIAL_LATEX_FORMS = new ArrayList<>();
 
+    public static Stream<TransfurVariant<?>> getPublicTransfurVariants() {
+        return ChangedRegistry.TRANSFUR_VARIANT.get().getValues().stream().filter(variant -> !SPECIAL_LATEX_FORMS.contains(variant.getRegistryName()));
+    }
+
+    @Deprecated
     public static List<TransfurVariant<?>> getFusionCompatible(TransfurVariant<?> source, TransfurVariant<?> other) {
         List<TransfurVariant<?>> list = new ArrayList<>();
         ChangedRegistry.TRANSFUR_VARIANT.get().forEach(variant -> {
@@ -62,6 +60,7 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
         return list;
     }
 
+    @Deprecated
     public static List<TransfurVariant<?>> getFusionCompatible(TransfurVariant<?> source, Class<? extends LivingEntity> clazz) {
         List<TransfurVariant<?>> list = new ArrayList<>();
         ChangedRegistry.TRANSFUR_VARIANT.get().forEach(variant -> {
@@ -70,185 +69,6 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
         });
         return list;
     }
-
-    public static final GenderedVariant<LightLatexWolfMale, LightLatexWolfFemale> LIGHT_LATEX_WOLF = register(GenderedVariant.Builder.of(ChangedEntities.WHITE_GOO_WOLF_MALE, ChangedEntities.WHITE_GOO_WOLF_FEMALE)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).addAbility(ChangedAbilities.SWITCH_GENDER).split(Builder::ignored, Builder::absorbing)
-            .buildGendered(Changed.modResource("form_light_latex_wolf")));
-
-    public static final TransfurVariant<AerosolLatexWolf> AEROSOL_LATEX_WOLF = register(Builder.of(ChangedEntities.AEROSOL_LATEX_WOLF)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).sound(ChangedSounds.SOUND3.getLocation())
-            .build(Changed.modResource("form_aerosol_latex_wolf")));
-    public static final TransfurVariant<DarkLatexDragon> DARK_LATEX_DRAGON = register(Builder.of(ChangedEntities.DARK_LATEX_DRAGON)
-            .groundSpeed(1.0F).swimSpeed(0.85f).glide().sound(ChangedSounds.SOUND3.getLocation()).faction(LatexType.DARK_LATEX)
-            .build(Changed.modResource("form_dark_latex_dragon")));
-    public static final TransfurVariant<DarkLatexWolfPartial> DARK_LATEX_WOLF_PARTIAL = register(Builder.of(ChangedEntities.BLACK_GOO_WOLF_PARTIAL)
-            .groundSpeed(1.025f).swimSpeed(0.975f).faction(LatexType.DARK_LATEX).transfurMode(TransfurMode.NONE)
-            .build(Changed.modResource("form_dark_latex_wolf_partial")));
-    public static final TransfurVariant<DarkLatexYufeng> DARK_LATEX_YUFENG = register(Builder.of(ChangedEntities.BLACK_GOO_YUFENG)
-            .groundSpeed(1.0F).swimSpeed(0.85f).glide().faction(LatexType.DARK_LATEX)
-            .build(Changed.modResource("form_dark_latex_yufeng")));
-    public static final TransfurVariant<LatexAlien> LATEX_ALIEN = register(Builder.of(ChangedEntities.GOO_ALIEN)
-            .groundSpeed(1.0f).swimSpeed(1.0f).stepSize(0.7f).nightVision()
-            .build(Changed.modResource("form_latex_alien")));
-    public static final TransfurVariant<LatexBee> LATEX_BEE = register(Builder.of(ChangedEntities.GOO_BEE)
-            .groundSpeed(1.05f).swimSpeed(0.75f).extraJumps(4).reducedFall().extraHands().addAbility(ChangedAbilities.CREATE_HONEYCOMB).breatheMode(BreatheMode.WEAK)
-            .build(Changed.modResource("form_latex_bee")));
-    public static final TransfurVariant<LatexBeifeng> LATEX_BEIFENG = register(Builder.of(ChangedEntities.BEIFENG)
-            .groundSpeed(1.05f).swimSpeed(1.0f).stepSize(0.7f).sound(ChangedSounds.SOUND3.getLocation())
-            .build(Changed.modResource("form_latex_beifeng")));
-    public static final TransfurVariant<LatexBenignWolf> LATEX_BENIGN_WOLF = register(Builder.of(ChangedEntities.BENIGN_GOO_WOLF)
-            .groundSpeed(0.15f).swimSpeed(0.15f).noVision().disableItems()
-            .build(Changed.modResource("form_latex_benign_wolf")));
-    public static final TransfurVariant<LatexBlueDragon> LATEX_BLUE_DRAGON = register(Builder.of(ChangedEntities.BLUE_GOO_DRAGON)
-            .groundSpeed(1.05f).swimSpeed(0.98f).stepSize(0.7f)
-            .build(Changed.modResource("form_latex_blue_dragon")));
-    public static final TransfurVariant<LatexBlueWolf> LATEX_BLUE_WOLF = register(Builder.of(ChangedEntities.BLUE_GOO_WOLF)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).absorbing()
-            .build(Changed.modResource("form_latex_blue_wolf")));
-    public static final TransfurVariant<LatexCrocodile> LATEX_CROCODILE = register(Builder.of(ChangedEntities.GOO_CROCODILE)
-            .groundSpeed(0.925f).swimSpeed(1.1f).additionalHealth(12).breatheMode(BreatheMode.STRONG)
-            .build(Changed.modResource("form_latex_crocodile")));
-    public static final TransfurVariant<LatexCrystalWolf> LATEX_CRYSTAL_WOLF = register(Builder.of(ChangedEntities.LATEX_CRYSTAL_WOLF)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).sound(ChangedSounds.SOUND3.getLocation())
-            .build(Changed.modResource("form_latex_crystal_wolf")));
-    public static final TransfurVariant<LatexCrystalWolfHorned> LATEX_CRYSTAL_WOLF_HORNED = register(Builder.of(LATEX_CRYSTAL_WOLF, ChangedEntities.LATEX_CRYSTAL_WOLF_HORNED)
-            .sound(ChangedSounds.SOUND3.getLocation())
-            .build(Changed.modResource("form_latex_crystal_wolf_horned")));
-    public static final TransfurVariant<LatexDeer> LATEX_DEER = register(Builder.of(ChangedEntities.LATEX_DEER)
-            .groundSpeed(1.1f).swimSpeed(0.95f).stepSize(0.7f)
-            .build(Changed.modResource("form_latex_deer")));
-    public static final TransfurVariant<GreenLizard> GREEN_LIZARD = register(Builder.of(ChangedEntities.GREEN_LIZARD)
-            .groundSpeed(1.05f).swimSpeed(0.98f).stepSize(0.7f).sound(ChangedSounds.SOUND3.getLocation())
-            .build(Changed.modResource("form_green_lizard")));
-    public static final TransfurVariant<LatexHuman> LATEX_HUMAN = register(Builder.of(ChangedEntities.GOO_HUMAN)
-            .groundSpeed(1.0f).swimSpeed(1.0f).stepSize(0.6f)
-            .build(Changed.modResource("form_latex_human")));
-    public static final TransfurVariant<LatexFennecFox> LATEX_FENNEC_FOX = register(Builder.of(ChangedEntities.GOO_FENNEC_FOX)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f)
-            .build(Changed.modResource("form_latex_fennec_fox")));
-    public static final TransfurVariant<LatexHypnoCat> LATEX_HYPNO_CAT = register(Builder.of(ChangedEntities.LATEX_HYPNO_CAT).jumpStrength(1.25f).additionalHealth(2)
-            .groundSpeed(1.15f).swimSpeed(0.9f).stepSize(0.7f).breatheMode(BreatheMode.WEAK).reducedFall().scares(Creeper.class).nightVision().addAbility(ChangedAbilities.HYPNOSIS)
-            .build(Changed.modResource("form_latex_hypno_cat")));
-    public static final TransfurVariant<LatexKeonWolf> LATEX_KEON_WOLF = register(Builder.of(ChangedEntities.LATEX_KEON_WOLF)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f)
-            .build(Changed.modResource("form_latex_keon_wolf")));
-    public static final TransfurVariant<LatexLeaf> LATEX_LEAF = register(Builder.of(ChangedEntities.LATEX_LEAF)
-            .groundSpeed(1.05f).swimSpeed(0.95f).stepSize(0.7f).absorbing()
-            .build(Changed.modResource("form_latex_leaf")));
-    public static final TransfurVariant<LatexMedusaCat> LATEX_MEDUSA_CAT = register(Builder.of(ChangedEntities.LATEX_MEDUSA_CAT).jumpStrength(1.25f).additionalHealth(2)
-            .groundSpeed(1.15f).swimSpeed(0.9f).stepSize(0.7f).breatheMode(BreatheMode.WEAK).reducedFall().scares(Creeper.class).nightVision().absorbing()
-            .build(Changed.modResource("form_latex_medusa_cat")));
-    public static final TransfurVariant<LatexMimicPlant> LATEX_MIMIC_PLANT = register(Builder.of(ChangedEntities.LATEX_MIMIC_PLANT)
-            .groundSpeed(1.05f).swimSpeed(0.95f).stepSize(0.7f).reducedFall().absorbing()
-            .build(Changed.modResource("form_latex_mimic_plant")));
-    public static final TransfurVariant<LatexMingCat> LATEX_MING_CAT = register(Builder.of(ChangedEntities.LATEX_MING_CAT).jumpStrength(1.25f).additionalHealth(2)
-            .groundSpeed(1.15f).swimSpeed(0.9f).stepSize(0.7f).breatheMode(BreatheMode.WEAK).reducedFall().scares(Creeper.class).nightVision()
-            .build(Changed.modResource("form_latex_ming_cat")));
-    public static final TransfurVariant<LatexMoth> LATEX_MOTH = register(Builder.of(ChangedEntities.LATEX_MOTH)
-            .groundSpeed(1.05f).swimSpeed(0.75f).extraJumps(6).reducedFall().breatheMode(BreatheMode.WEAK)
-            .build(Changed.modResource("form_latex_moth")));
-    public static final TransfurVariant<LatexOrca> LATEX_ORCA = register(Builder.of(ChangedEntities.GOO_ORCA)
-            .groundSpeed(0.875f).swimSpeed(1.30f).stepSize(0.7f).gills()
-            .build(Changed.modResource("form_latex_orca")));
-    public static final TransfurVariant<LatexOtter> LATEX_OTTER = register(Builder.of(ChangedEntities.GOO_OTTER)
-            .groundSpeed(1.05f).swimSpeed(1.2f).breatheMode(BreatheMode.STRONG)
-            .build(Changed.modResource("form_latex_otter")));
-    public static final TransfurVariant<LatexPinkDeer> LATEX_PINK_DEER = register(Builder.of(ChangedEntities.LATEX_PINK_DEER)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f)
-            .build(Changed.modResource("form_latex_pink_deer")));
-    public static final TransfurVariant<LatexPinkWyvern> LATEX_PINK_WYVERN = register(Builder.of(ChangedEntities.LATEX_PINK_WYVERN)
-            .groundSpeed(1.05f).swimSpeed(0.95f).stepSize(0.7f)
-            .build(Changed.modResource("form_latex_pink_wyvern")));
-    public static final TransfurVariant<LatexPinkYuinDragon> LATEX_PINK_YUIN_DRAGON = register(Builder.of(ChangedEntities.LATEX_PINK_YUIN_DRAGON)
-            .groundSpeed(1.0F).swimSpeed(0.85f).glide()
-            .build(Changed.modResource("form_latex_pink_yuin_dragon")));
-    public static final TransfurVariant<LatexPurpleFox> LATEX_PURPLE_FOX = register(Builder.of(ChangedEntities.LATEX_PURPLE_FOX)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f)
-            .build(Changed.modResource("form_latex_purple_fox")));
-    public static final TransfurVariant<LatexRaccoon> LATEX_RACCOON = register(Builder.of(ChangedEntities.LATEX_RACCOON)
-            .groundSpeed(0.95f).swimSpeed(0.97f).noVision()
-            .build(Changed.modResource("form_latex_raccoon")));
-    public static final TransfurVariant<LatexRedDragon> LATEX_RED_DRAGON = register(Builder.of(ChangedEntities.LATEX_RED_DRAGON)
-            .groundSpeed(1.0F).swimSpeed(0.85f).glide()
-            .build(Changed.modResource("form_latex_red_dragon")));
-    public static final TransfurVariant<LatexRedPanda> LATEX_RED_PANDA = register(Builder.of(ChangedEntities.GOO_RED_PANDA)
-            .groundSpeed(1.05f).swimSpeed(0.95f).stepSize(0.7f).reducedFall()
-            .build(Changed.modResource("form_latex_red_panda")));
-    public static final TransfurVariant<LatexShark> LATEX_SHARK = register(Builder.of(ChangedEntities.GOO_SHARK)
-            .groundSpeed(0.875f).swimSpeed(1.30f).stepSize(0.7f).gills().absorbing()
-            .build(Changed.modResource("form_latex_shark")));
-    public static final TransfurVariant<LatexSnake> LATEX_SNAKE = register(Builder.of(ChangedEntities.GOO_SNAKE)
-            .groundSpeed(1.0F).swimSpeed(0.95f).additionalHealth(6).stepSize(1.1f).noLegs().addAbility(ChangedAbilities.SLITHER)
-            .build(Changed.modResource("form_latex_snake")));
-    public static final TransfurVariant<LatexSniperDog> LATEX_SNIPER_DOG = register(Builder.of(ChangedEntities.LATEX_SNIPER_DOG)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).sound(ChangedSounds.SOUND3.getLocation())
-            .build(Changed.modResource("form_latex_sniper_dog")));
-    public static final TransfurVariant<LatexSquirrel> LATEX_SQUIRREL = register(Builder.of(ChangedEntities.GOO_SQUIRREL)
-            .groundSpeed(1.1f).swimSpeed(0.9f).stepSize(0.7f).reducedFall()
-            .build(Changed.modResource("form_latex_squirrel")));
-    public static final TransfurVariant<LatexStiger> LATEX_STIGER = register(Builder.of(ChangedEntities.GOO_STIGER)
-            .canClimb().extraHands().nightVision().addAbility(ChangedAbilities.CREATE_COBWEB)
-            .build(Changed.modResource("form_latex_stiger")));
-    public static final TransfurVariant<LatexTigerShark> LATEX_TIGER_SHARK = register(Builder.of(ChangedEntities.GOO_TIGER_SHARK)
-            .groundSpeed(0.925f).swimSpeed(1.2f).additionalHealth(8).gills().addAbility(ChangedAbilities.SUMMON_SHARKS)
-            .build(Changed.modResource("form_latex_tiger_shark")));
-    public static final TransfurVariant<LatexTrafficConeDragon> LATEX_TRAFFIC_CONE_DRAGON = register(Builder.of(ChangedEntities.LATEX_TRAFFIC_CONE_DRAGON)
-            .groundSpeed(1.05f).swimSpeed(0.95f).stepSize(0.7f).absorbing()
-            .build(Changed.modResource("form_latex_traffic_cone_dragon")));
-    public static final TransfurVariant<LatexTranslucentLizard> LATEX_TRANSLUCENT_LIZARD = register(Builder.of(ChangedEntities.LATEX_TRANSLUCENT_LIZARD)
-            .groundSpeed(1.05f).swimSpeed(1.0f).stepSize(0.7f).absorbing()
-            .build(Changed.modResource("form_latex_translucent_lizard")));
-    public static final TransfurVariant<LatexWatermelonCat> LATEX_WATERMELON_CAT = register(Builder.of(ChangedEntities.GOO_WATERMELON_CAT).jumpStrength(1.25f).additionalHealth(2)
-            .groundSpeed(1.15f).swimSpeed(0.9f).stepSize(0.7f).breatheMode(BreatheMode.WEAK).reducedFall().scares(Creeper.class).nightVision().absorbing()
-            .build(Changed.modResource("form_latex_watermelon_cat")));
-    public static final TransfurVariant<LatexWhiteTiger> LATEX_WHITE_TIGER = register(Builder.of(ChangedEntities.LATEX_WHITE_TIGER).jumpStrength(1.25f).additionalHealth(2)
-            .groundSpeed(1.15f).swimSpeed(0.9f).stepSize(0.7f).breatheMode(BreatheMode.WEAK).reducedFall().scares(Creeper.class).nightVision()
-            .build(Changed.modResource("form_latex_white_tiger")));
-    public static final TransfurVariant<LatexYuin> LATEX_YUIN = register(Builder.of(ChangedEntities.GOO_YUIN)
-            .groundSpeed(1.05f).swimSpeed(0.98f).stepSize(0.7f).reducedFall().absorbing()
-            .build(Changed.modResource("form_latex_yuin")));
-    public static final TransfurVariant<LightLatexCentaur> LIGHT_LATEX_CENTAUR = register(Builder.of(ChangedEntities.WHITE_GOO_CENTAUR).quadrupedal()
-            .groundSpeed(1.20f).swimSpeed(0.9f).stepSize(1.1f).additionalHealth(10).cameraZOffset(7.0f / 16.0f).jumpStrength(1.25f).rideable().reducedFall()
-            .build(Changed.modResource("form_light_latex_centaur")));
-    public static final TransfurVariant<LightLatexKnight> LIGHT_LATEX_KNIGHT = register(Builder.of(ChangedEntities.WHITE_GOO_KNIGHT)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).absorbing()
-            .build(Changed.modResource("form_light_latex_knight")));
-    public static final TransfurVariant<LightLatexKnightFusion> LIGHT_LATEX_KNIGHT_FUSION = register(Builder.of(LIGHT_LATEX_KNIGHT, ChangedEntities.WHITE_GOO_KNIGHT_FUSION)
-            .additionalHealth(8).fusionOf(LIGHT_LATEX_WOLF.male(), LIGHT_LATEX_KNIGHT)
-            .build(Changed.modResource("form_light_latex_knight_fusion")));
-    public static final GenderedVariant<WhiteWolfMale, WhiteWolfFemale> WHITE_WOLF = register(GenderedVariant.Builder.of(ChangedEntities.WHITE_WOLF_MALE, ChangedEntities.WHITE_WOLF_FEMALE)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).sound(ChangedSounds.SOUND3.getLocation())
-            .buildGendered(Changed.modResource("form_white_wolf")));
-    public static final TransfurVariant<WhiteLatexWolf> WHITE_LATEX_WOLF = register(Builder.of(ChangedEntities.PURE_WHITE_GOO_WOLF)
-            .groundSpeed(1.05f).swimSpeed(0.9f).stepSize(0.7f).faction(LatexType.WHITE_LATEX)
-            .build(Changed.modResource("form_white_latex_wolf")));
-
-    public static final GenderedVariant<DarkLatexWolfMale, DarkLatexWolfFemale> DARK_LATEX_WOLF = register(GenderedVariant.Builder.of(ChangedEntities.BLACK_GOO_WOLF_MALE, ChangedEntities.BLACK_GOO_WOLF_FEMALE)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).split(Builder::ignored, Builder::absorbing).faction(LatexType.DARK_LATEX)
-            .buildGendered(Changed.modResource("form_dark_latex_wolf")));
-    public static final GenderedVariant<PhageLatexWolfMale, PhageLatexWolfFemale> PHAGE_LATEX_WOLF = register(GenderedVariant.Builder.of(ChangedEntities.PHAGE_LATEX_WOLF_MALE, ChangedEntities.PHAGE_LATEX_WOLF_FEMALE)
-            .groundSpeed(1.075f).swimSpeed(0.95f).stepSize(0.7f).split(Builder::ignored, Builder::absorbing).faction(LatexType.DARK_LATEX)
-            .buildGendered(Changed.modResource("form_phage_latex_wolf")));
-    public static final TransfurVariant<DarkLatexPup> DARK_LATEX_PUP = register(Builder.of(DARK_LATEX_WOLF.male(), ChangedEntities.BLACK_GOO_PUP)
-            .transfurMode(TransfurMode.NONE).holdItemsInMouth().additionalHealth(-8).groundSpeed(1.25F).reducedFall().addAbility(ChangedAbilities.PUDDLE)
-            .build(Changed.modResource("form_dark_latex_pup")));
-    public static final GenderedVariant<LatexMantaRayMale, LatexMantaRayFemale> LATEX_MANTA_RAY = register(GenderedVariant.Builder.of(TransfurVariant.LATEX_SHARK, ChangedEntities.LATEX_MANTA_RAY_MALE, ChangedEntities.LATEX_MANTA_RAY_FEMALE)
-            .split(Builder::ignored, female -> female.groundSpeed(0.26F).swimSpeed(1.9F).absorbing().additionalHealth(8).noLegs())
-            .buildGendered(Changed.modResource("form_latex_manta_ray")));
-    public static final GenderedVariant<LatexMermaidShark, LatexSiren> LATEX_MERMAID_SHARK = register(GenderedVariant.Builder.of(TransfurVariant.LATEX_SHARK, ChangedEntities.LATEX_MERMAID_SHARK, ChangedEntities.LATEX_SIREN)
-            .groundSpeed(0.26F).swimSpeed(1.9F).split(male -> male.replicating(), female -> female.absorbing().addAbility(ChangedAbilities.SIREN_SING)).additionalHealth(8).noLegs()
-            .buildGendered(Changed.modResource("form_latex_mermaid_shark")));
-    public static final GenderedVariant<LatexSharkMale, LatexSharkFemale> LATEX_SHARK_FUSION = register(GenderedVariant.Builder.of(LATEX_SHARK, ChangedEntities.LATEX_SHARK_MALE, ChangedEntities.LATEX_SHARK_FEMALE)
-            .groundSpeed(0.9f).swimSpeed(1.35f).stepSize(0.7f).additionalHealth(8).split(Builder::ignored, Builder::absorbing).fusionOf(LATEX_SHARK, Shark.class)
-            .buildGendered(Changed.modResource("form_latex_shark")));
-    public static final GenderedVariant<LatexSnowLeopardMale, LatexSnowLeopardFemale> LATEX_SNOW_LEOPARD = register(GenderedVariant.Builder.of(ChangedEntities.GOO_SNOW_LEOPARD_MALE, ChangedEntities.GOO_SNOW_LEOPARD_FEMALE)
-            .groundSpeed(1.15f).swimSpeed(0.9f).stepSize(0.7f).breatheMode(BreatheMode.WEAK).reducedFall().scares(Creeper.class).split(Builder::ignored, Builder::absorbing).nightVision().jumpStrength(1.25f).additionalHealth(2)
-            .buildGendered(Changed.modResource("form_latex_snow_leopard")));
-    public static final GenderedVariant<LatexSquidDogMale, LatexSquidDogFemale> LATEX_SQUID_DOG = register(GenderedVariant.Builder.of(ChangedEntities.GOO_SQUID_DOG_MALE, ChangedEntities.GOO_SQUID_DOG_FEMALE)
-            .groundSpeed(0.925f).swimSpeed(1.1f).additionalHealth(10).gills().extraHands().split(Builder::replicating, Builder::absorbing).addAbility(ChangedAbilities.CREATE_INKBALL)
-            .buildGendered(Changed.modResource("form_latex_squid_dog")));
-
-    public static final TransfurVariant<?> FALLBACK_VARIANT = LIGHT_LATEX_WOLF.male();
 
     public ResourceLocation getFormId() {
         return getRegistryName();
@@ -271,46 +91,42 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
         return ChangedEntities.getCachedEntity(level, ctor.get()).getTicksRequiredToFreeze();
     }
 
+    @Deprecated
     public boolean isFusionOf(TransfurVariant<?> variantA, TransfurVariant<?> variantB) {
         if (variantA == null || variantB == null)
             return false;
 
-        if (fusionOf.isPresent()) {
-            return
-                    (fusionOf.get().getFirst().getFormId().equals(variantA.getFormId()) &&
-                            fusionOf.get().getSecond().getFormId().equals(variantB.getFormId())) ||
-
-                    (fusionOf.get().getSecond().getFormId().equals(variantA.getFormId()) &&
-                            fusionOf.get().getFirst().getFormId().equals(variantB.getFormId()));
-        }
-
-        return false;
+        return ChangedFusions.INSTANCE.getFusionsFor(variantA, variantB).anyMatch(fusion -> fusion == this);
     }
 
+    @Deprecated
     public boolean isFusionOf(TransfurVariant<?> variantA, Class<? extends LivingEntity> clazz) {
         if (variantA == null || clazz == null)
             return false;
 
-        if (mobFusionOf.isPresent()) {
-            return mobFusionOf.get().getFirst().getFormId().equals(variantA.getFormId()) &&
-                            mobFusionOf.get().getSecond().isAssignableFrom(clazz);
-        }
-
-        return false;
+        return ChangedFusions.INSTANCE.getFusionsFor(variantA, clazz).anyMatch(fusion -> fusion == this);
     }
 
+    @Deprecated(forRemoval = true)
     public float swimMultiplier() {
-        return swimSpeed;
+        return 1.0F;
     }
 
+    @Deprecated(forRemoval = true)
     public float landMultiplier() {
-        return groundSpeed;
+        return 1.0F;
     }
 
     public boolean is(@Nullable TransfurVariant<?> variant) {
         if (variant == null)
             return false;
         return getEntityType() == variant.getEntityType();
+    }
+
+    public boolean is(@Nullable Supplier<? extends TransfurVariant<?>> variant) {
+        if (variant == null)
+            return false;
+        return getEntityType() == variant.get().getEntityType();
     }
 
     public boolean is(TagKey<TransfurVariant<?>> tagKey) {
@@ -348,47 +164,36 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
     // Variant properties
     public final Supplier<EntityType<T>> ctor;
     public final LatexType type;
-    public final float groundSpeed;
-    public final float swimSpeed;
     public final float jumpStrength;
     public final BreatheMode breatheMode;
     public final float stepSize;
     public final boolean canGlide;
     public final int extraJumpCharges;
-    public final int additionalHealth;
     public final boolean reducedFall;
     public final boolean canClimb;
-    public final boolean nightVision;
-    public final boolean noVision;
+    public final VisionType visionType;
     public final int legCount;
     public final boolean hasLegs;
     public final UseItemMode itemUseMode;
     public final List<Class<? extends PathfinderMob>> scares;
     public final TransfurMode transfurMode;
-    public final Optional<Pair<TransfurVariant<?>, TransfurVariant<?>>> fusionOf;
-    public final Optional<Pair<TransfurVariant<?>, Class<? extends LivingEntity>>> mobFusionOf;
     public final ImmutableList<Function<EntityType<?>, ? extends AbstractAbility<?>>> abilities;
     public final float cameraZOffset;
     public final ResourceLocation sound;
 
-    public TransfurVariant(Supplier<EntityType<T>> ctor, LatexType type, float groundSpeed, float swimSpeed,
-                           float jumpStrength, BreatheMode breatheMode, float stepSize, boolean canGlide, int extraJumpCharges, int additionalHealth,
+    public TransfurVariant(Supplier<EntityType<T>> ctor, LatexType type,
+                           float jumpStrength, BreatheMode breatheMode, float stepSize, boolean canGlide, int extraJumpCharges,
                            boolean reducedFall, boolean canClimb,
-                           boolean nightVision, boolean noVision, int legCount, UseItemMode itemUseMode, List<Class<? extends PathfinderMob>> scares, TransfurMode transfurMode,
-                           Optional<Pair<TransfurVariant<?>, TransfurVariant<?>>> fusionOf,
-                           Optional<Pair<TransfurVariant<?>, Class<? extends LivingEntity>>> mobFusionOf, List<Function<EntityType<?>, ? extends AbstractAbility<?>>> abilities, float cameraZOffset, ResourceLocation sound) {
+                           VisionType visionType, int legCount, UseItemMode itemUseMode, List<Class<? extends PathfinderMob>> scares, TransfurMode transfurMode,
+                           List<Function<EntityType<?>, ? extends AbstractAbility<?>>> abilities, float cameraZOffset, ResourceLocation sound) {
         this.ctor = ctor;
         this.type = type;
-        this.groundSpeed = groundSpeed;
-        this.swimSpeed = swimSpeed;
         this.jumpStrength = jumpStrength;
         this.breatheMode = breatheMode;
         this.stepSize = stepSize;
-        this.noVision = noVision;
+        this.visionType = visionType;
         this.canGlide = canGlide;
         this.extraJumpCharges = extraJumpCharges;
-        this.additionalHealth = additionalHealth;
-        this.nightVision = nightVision;
         this.legCount = legCount;
         this.hasLegs = legCount > 0;
         this.itemUseMode = itemUseMode;
@@ -397,8 +202,6 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
         this.canClimb = canClimb;
         this.scares = scares;
         this.transfurMode = transfurMode;
-        this.fusionOf = fusionOf;
-        this.mobFusionOf = mobFusionOf;
         this.cameraZOffset = cameraZOffset;
         this.sound = sound;
     }
@@ -426,7 +229,7 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
             specialLatex.setSpecialForm(UUID.fromString(
                     getFormId().toString().substring(Changed.modResourceStr("special/form_").length())));
 
-        latexForm.setCustomName(PatreonBenefits.getPlayerName(player));
+        latexForm.setCustomName(player.getDisplayName());
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
             if (player == Minecraft.getInstance().player)
                 latexForm.setCustomNameVisible(false);
@@ -449,7 +252,15 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
         return newEntity;
     }
 
-    public ChangedEntity replaceEntity(@NotNull LivingEntity entity) {
+    public IAbstractChangedEntity replaceEntity(@NotNull LivingEntity entity) {
+        return replaceEntity(entity, (LivingEntity) null);
+    }
+
+    public IAbstractChangedEntity replaceEntity(@NotNull LivingEntity entity, @Nullable IAbstractChangedEntity cause) {
+        return replaceEntity(entity, cause == null ? null : cause.getEntity());
+    }
+
+    public IAbstractChangedEntity replaceEntity(@NotNull LivingEntity entity, @Nullable LivingEntity cause) {
         var newEntity = spawnAtEntity(entity);
         if (entity.hasCustomName()) {
             newEntity.setCustomName(entity.getCustomName());
@@ -466,7 +277,16 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
 
         if (entity instanceof Player player) {
             newEntity.getBasicPlayerInfo().copyFrom(((PlayerDataExtension)player).getBasicPlayerInfo());
-            ProcessTransfur.killPlayerBy(player, newEntity);
+            if (!ProcessTransfur.killPlayerByTransfur(player, cause != null ? cause : newEntity)) {
+                newEntity.discard();
+                var instance = ProcessTransfur.setPlayerTransfurVariant(player, this, TransfurCause.GRAB_REPLICATE, 1.0f);
+                instance.willSurviveTransfur = true;
+
+                ProcessTransfur.forceNearbyToRetarget(player.level, player);
+
+                player.heal(10.0F);
+                return IAbstractChangedEntity.forPlayer(player);
+            }
         } else if (entity instanceof ChangedEntity changedEntity) {
             newEntity.getBasicPlayerInfo().copyFrom(changedEntity.getBasicPlayerInfo());
             // Take armor and held items
@@ -488,7 +308,8 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
 
             entity.discard();
         }
-        return newEntity;
+
+        return IAbstractChangedEntity.forEntity(newEntity);
     }
 
     public BreatheMode getBreatheMode() {
@@ -499,66 +320,74 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
 
     public boolean rideable() { return this.abilities.contains(ChangedAbilities.ACCESS_SADDLE); }
 
+    public static class UniversalAbilitiesEvent extends Event {
+        private final List<Function<EntityType<?>, ? extends AbstractAbility<?>>> abilities;
+
+        public UniversalAbilitiesEvent(List<Function<EntityType<?>, ? extends AbstractAbility<?>>> abilities) {
+            this.abilities = abilities;
+        }
+
+        public void addAbility(Supplier<? extends AbstractAbility<?>> ability) {
+            abilities.add(type -> ability.get());
+        }
+
+        public void addAbility(Predicate<EntityType<?>> predicate, Supplier<? extends AbstractAbility<?>> ability) {
+            abilities.add(type -> predicate.test(type) ? ability.get() : null);
+        }
+
+        public void addAbility(Function<EntityType<?>, ? extends AbstractAbility<?>> ability) {
+            abilities.add(ability);
+        }
+
+        public Predicate<EntityType<?>> isOfTag(TagKey<EntityType<?>> tag) {
+            return type -> type.is(tag);
+        }
+
+        public Predicate<EntityType<?>> isNotOfTag(TagKey<EntityType<?>> tag) {
+            return type -> !type.is(tag);
+        }
+    }
+
     public static class Builder<T extends ChangedEntity> {
         final Supplier<EntityType<T>> entityType;
         LatexType type = LatexType.NEUTRAL;
-        float groundSpeed = 1.0F;
-        float swimSpeed = 1.0F;
         float jumpStrength = 1.0F;
         BreatheMode breatheMode = BreatheMode.NORMAL;
         float stepSize = 0.6F;
         boolean canGlide = false;
         int extraJumpCharges = 0;
-        int additionalHealth = 4;
         boolean reducedFall = false;
-        boolean noVision = false;
         boolean canClimb = false;
-        boolean nightVision = false;
+        VisionType visionType = VisionType.NORMAL;
         int legCount = 2;
         UseItemMode itemUseMode = UseItemMode.NORMAL;
         List<Class<? extends PathfinderMob>> scares = new ArrayList<>(ImmutableList.of(AbstractVillager.class));
         TransfurMode transfurMode = TransfurMode.REPLICATION;
-        Optional<Pair<TransfurVariant<?>, TransfurVariant<?>>> fusionOf = Optional.empty();
-        Optional<Pair<TransfurVariant<?>, Class<? extends LivingEntity>>> mobFusionOf = Optional.empty();
         List<Function<EntityType<?>, ? extends AbstractAbility<?>>> abilities = new ArrayList<>();
         float cameraZOffset = 0.0F;
         ResourceLocation sound = ChangedSounds.POISON.getLocation();
 
         public Builder(Supplier<EntityType<T>> entityType) {
             this.entityType = entityType;
-            // vvv-- Add universal abilities here --vvv
-            this.abilities.add(type -> type.is(ChangedTags.EntityTypes.ORGANIC_LATEX) ? null : ChangedAbilities.SWITCH_TRANSFUR_MODE.get());
-            this.abilities.add(type -> type.is(ChangedTags.EntityTypes.ORGANIC_LATEX) ? null : ChangedAbilities.GRAB_ENTITY_ABILITY.get());
-            //this.abilities.add(type -> ChangedAbilities.SELECT_HAIRSTYLE.get());
+
+            var event = new UniversalAbilitiesEvent(this.abilities);
+            event.addAbility(event.isOfTag(ChangedTags.EntityTypes.LATEX)
+                    .and(event.isNotOfTag(ChangedTags.EntityTypes.PARTIAL_LATEX)), ChangedAbilities.SWITCH_TRANSFUR_MODE);
+            event.addAbility(event.isOfTag(ChangedTags.EntityTypes.LATEX)
+                    .and(event.isNotOfTag(ChangedTags.EntityTypes.ARMLESS))
+                    .and(event.isNotOfTag(ChangedTags.EntityTypes.PARTIAL_LATEX)), ChangedAbilities.GRAB_ENTITY_ABILITY);
+
+            MinecraftForge.EVENT_BUS.post(event);
         }
 
-        private void ignored() {}
+        public void ignored() {}
 
         public static <T extends ChangedEntity> Builder<T> of(Supplier<EntityType<T>> entityType) {
             return new Builder<T>(entityType);
         }
 
-        public static <T extends ChangedEntity> Builder<T> of(TransfurVariant<?> variant, Supplier<EntityType<T>> entityType) {
-            return (new Builder<T>(entityType)).faction(variant.type).groundSpeed(variant.groundSpeed).swimSpeed(variant.swimSpeed)
-                    .jumpStrength(variant.jumpStrength).breatheMode(variant.breatheMode).stepSize(variant.stepSize).glide(variant.canGlide).extraJumps(variant.extraJumpCharges)
-                    .abilities(variant.abilities).reducedFall(variant.reducedFall).canClimb(variant.canClimb).nightVision(variant.nightVision).hasLegs(variant.hasLegs).scares(variant.scares)
-                    .transfurMode(variant.transfurMode).cameraZOffset(variant.cameraZOffset).noVision(variant.noVision).itemUseMode(variant.itemUseMode);
-        }
-
-        public static <T extends ChangedEntity> Builder<T> of(GenderedVariant<?, ?> variant, Supplier<EntityType<T>> entityType) {
-            throw new InvalidParameterException("Invalid variant supplied");
-        }
-
         public Builder<T> faction(LatexType type) {
             this.type = type; return this;
-        }
-
-        public Builder<T> groundSpeed(float factor) {
-            this.groundSpeed = factor; return this;
-        }
-
-        public Builder<T> swimSpeed(float factor) {
-            this.swimSpeed = factor; return this;
         }
 
         public Builder<T> jumpStrength(float factor) {
@@ -582,11 +411,11 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
         }
 
         public Builder<T> noVision() {
-            this.noVision = true; return this;
+            this.visionType = VisionType.BLIND; return this;
         }
 
         public Builder<T> noVision(boolean v) {
-            this.noVision = v; return this;
+            this.visionType = v ? VisionType.BLIND : visionType; return this;
         }
 
         public Builder<T> reducedFall(boolean v) {
@@ -628,10 +457,6 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
         public Builder<T> extraJumps(int count) {
             this.extraJumpCharges = count; return this;
         }
-
-        public Builder<T> additionalHealth(int value) {
-            this.additionalHealth = value; return this;
-        }
         
         public Builder<T> addAbility(Function<EntityType<?>, ? extends AbstractAbility<?>> ability) {
             if (ability != null)
@@ -666,24 +491,19 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
         }
 
         public Builder<T> nightVision() {
-            this.nightVision = true; return this;
+            this.visionType = VisionType.NIGHT_VISION; return this;
         }
 
         public Builder<T> nightVision(boolean v) {
-            this.nightVision = v; return this;
+            this.visionType = v ? VisionType.NIGHT_VISION : visionType; return this;
         }
 
+        public Builder<T> visionType(VisionType type) {
+            this.visionType = type; return this;
+        }
 
         public Builder<T> transfurMode(TransfurMode mode) {
             this.transfurMode = mode; return this;
-        }
-
-        public Builder<T> fusionOf(TransfurVariant<?> formA, TransfurVariant<?> formB) {
-            this.fusionOf = Optional.of(Pair.of(formA, formB)); return this;
-        }
-
-        public Builder<T> fusionOf(TransfurVariant<?> formA, Class<? extends LivingEntity> mobClass) {
-            this.mobFusionOf = Optional.of(Pair.of(formA, mobClass)); return this;
         }
 
         public Builder<T> noLegs() {
@@ -724,60 +544,19 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
             this.sound = event; return this;
         }
 
-        public TransfurVariant<T> build(ResourceLocation formId) {
-            var variant = new TransfurVariant<>(entityType, type, groundSpeed, swimSpeed, jumpStrength, breatheMode, stepSize, canGlide, extraJumpCharges, additionalHealth,
-                    reducedFall, canClimb, nightVision, noVision, legCount, itemUseMode, scares, transfurMode, fusionOf, mobFusionOf, abilities, cameraZOffset, sound);
-            variant.setRegistryName(formId);
-            return variant;
+        public TransfurVariant<T> build() {
+            return new TransfurVariant<>(entityType, type, jumpStrength, breatheMode, stepSize, canGlide, extraJumpCharges,
+                    reducedFall, canClimb, visionType, legCount, itemUseMode, scares, transfurMode, abilities, cameraZOffset, sound);
         }
     }
 
-    @SubscribeEvent
-    public static void onRegister(RegistryEvent.Register<TransfurVariant<?>> event) {
-        var registry = event.getRegistry();
-        ALL_LATEX_FORMS.values().forEach(registry::register);
-    }
-
-    public static <T extends ChangedEntity> TransfurVariant<T> register(TransfurVariant<T> variant) {
-        ALL_LATEX_FORMS.put(variant.getFormId(), variant);
-        PUBLIC_LATEX_FORMS.add(variant.getFormId());
-        if (variant.type != LatexType.NEUTRAL)
-            VARIANTS_BY_TYPE.computeIfAbsent(variant.type, t -> new ArrayList<>()).add(variant.getFormId());
-        if (variant.fusionOf.isPresent())
-            FUSION_LATEX_FORMS.add(variant.getFormId());
-        if (variant.mobFusionOf.isPresent())
-            MOB_FUSION_LATEX_FORMS.add(variant.getFormId());
-        return variant;
-    }
-
-    public static <M extends ChangedEntity & GenderedEntity, F extends ChangedEntity & GenderedEntity> GenderedVariant<M, F> register(GenderedVariant<M, F> variant) {
-        ALL_LATEX_FORMS.put(variant.male.getFormId(), variant.male);
-        ALL_LATEX_FORMS.put(variant.female.getFormId(), variant.female);
-        PUBLIC_LATEX_FORMS.add(variant.male.getFormId());
-        PUBLIC_LATEX_FORMS.add(variant.female.getFormId());
-        if (variant.male.type != LatexType.NEUTRAL)
-            VARIANTS_BY_TYPE.computeIfAbsent(variant.male.type, t -> new ArrayList<>()).add(variant.male.getFormId());
-        if (variant.female.type != LatexType.NEUTRAL)
-            VARIANTS_BY_TYPE.computeIfAbsent(variant.female.type, t -> new ArrayList<>()).add(variant.female.getFormId());
-        if (variant.male.fusionOf.isPresent())
-            FUSION_LATEX_FORMS.add(variant.male.getFormId());
-        if (variant.female.fusionOf.isPresent())
-            FUSION_LATEX_FORMS.add(variant.female.getFormId());
-        if (variant.male.mobFusionOf.isPresent())
-            MOB_FUSION_LATEX_FORMS.add(variant.male.getFormId());
-        if (variant.female.mobFusionOf.isPresent())
-            MOB_FUSION_LATEX_FORMS.add(variant.female.getFormId());
-        return variant;
-    }
-
     public static <T extends ChangedEntity> TransfurVariant<T> registerSpecial(TransfurVariant<T> variant) {
-        ALL_LATEX_FORMS.put(variant.getFormId(), variant);
         SPECIAL_LATEX_FORMS.add(variant.getFormId());
         return variant;
     }
 
     public static TransfurVariant<?> findEntityTransfurVariant(ChangedEntity entity) {
-        for (TransfurVariant<?> variant : ALL_LATEX_FORMS.values())
+        for (TransfurVariant<?> variant : ChangedRegistry.TRANSFUR_VARIANT.get().getValues())
             if (variant.ctor != null && variant.ctor.get().equals(entity.getType()))
                 return variant;
         return null;
@@ -821,13 +600,14 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
 
         List<TransfurVariant<?>> fusionOf = new ArrayList<>();
         GsonHelper.getAsJsonArray(root, "fusionOf", new JsonArray()).forEach(element -> {
-            fusionOf.add(ALL_LATEX_FORMS.get(ResourceLocation.tryParse(element.getAsString())));
+            fusionOf.add(ChangedRegistry.TRANSFUR_VARIANT.get().getValue(ResourceLocation.tryParse(element.getAsString())));
         });
 
         AtomicReference<TransfurVariant<?>> mobFusionLatex = new AtomicReference<>(null);
         AtomicReference<Class<? extends LivingEntity>> mobFusionMob = null;
         GsonHelper.getAsJsonArray(root, "mobFusionOf", new JsonArray()).forEach(element -> {
-            mobFusionLatex.set(ALL_LATEX_FORMS.getOrDefault(ResourceLocation.tryParse(element.getAsString()), mobFusionLatex.get()));
+            if (ChangedRegistry.TRANSFUR_VARIANT.get().containsKey(ResourceLocation.tryParse(element.getAsString())))
+                mobFusionLatex.set(ChangedRegistry.TRANSFUR_VARIANT.get().getValue(ResourceLocation.tryParse(element.getAsString())));
             try {
                 mobFusionMob.compareAndSet(null, (Class<? extends LivingEntity>)Class.forName(element.getAsString()));
             } catch (ClassNotFoundException ignored) {}
@@ -840,29 +620,27 @@ public class TransfurVariant<T extends ChangedEntity> extends ForgeRegistryEntry
 
         List<Function<EntityType<?>, ? extends AbstractAbility<?>>> nAbilitiesList = abilities.stream().map(a -> (Function<EntityType<?>, AbstractAbility<?>>) type -> a).collect(Collectors.toList());
 
+        boolean nightVision = GsonHelper.getAsBoolean(root, "nightVision", false);
+        float speed = GsonHelper.getAsFloat(root, "groundSpeed", 1.0F) * 0.1f;
+        float swimSpeed = GsonHelper.getAsFloat(root, "swimSpeed", 1.0F);
+        int additionalHealth = GsonHelper.getAsInt(root, "additionalHealth", 4);
+
         return new TransfurVariant<>(
                 () -> (EntityType<ChangedEntity>) Registry.ENTITY_TYPE.get(entityType),
                 LatexType.valueOf(GsonHelper.getAsString(root, "latexType", LatexType.NEUTRAL.toString())),
-                GsonHelper.getAsFloat(root, "groundSpeed", 1.0f),
-                GsonHelper.getAsFloat(root, "swimSpeed", 1.0f),
                 GsonHelper.getAsFloat(root, "jumpStrength", 1.0f),
                 BreatheMode.valueOf(GsonHelper.getAsString(root, "breatheMode", BreatheMode.NORMAL.toString())),
                 GsonHelper.getAsFloat(root, "stepSize", 0.6f),
                 GsonHelper.getAsBoolean(root, "canGlide", false),
                 GsonHelper.getAsInt(root, "extraJumpCharges", 0),
-                GsonHelper.getAsInt(root, "additionalHealth", 4),
                 GsonHelper.getAsBoolean(root, "reducedFall", false),
                 GsonHelper.getAsBoolean(root, "canClimb", false),
-                GsonHelper.getAsBoolean(root, "nightVision", false),
-                GsonHelper.getAsBoolean(root, "noVision", false),
+                VisionType.fromSerial(GsonHelper.getAsString(root, "visionType", (nightVision ? VisionType.NIGHT_VISION : VisionType.NORMAL).getSerializedName()))
+                        .result().orElse(VisionType.NORMAL),
                 GsonHelper.getAsInt(root, "legCount", 2),
                 UseItemMode.valueOf(GsonHelper.getAsString(root, "itemUseMode", UseItemMode.NORMAL.toString())),
                 scares,
                 TransfurMode.valueOf(GsonHelper.getAsString(root, "transfurMode", TransfurMode.REPLICATION.toString())),
-                fusionOf.size() < 2 ? Optional.empty() : Optional.of(new Pair<>(
-                        fusionOf.get(0), fusionOf.get(1)
-                )),
-                mobFusionLatex.get() != null && mobFusionMob.get() != null ? Optional.of(new Pair<>(mobFusionLatex.getAcquire(), mobFusionMob.getAcquire())) : Optional.empty(),
                 nAbilitiesList,
                 GsonHelper.getAsFloat(root, "cameraZOffset", 0.0F),
                 ResourceLocation.tryParse(GsonHelper.getAsString(root, "sound", ChangedSounds.POISON.getLocation().toString()))).setRegistryName(id);

@@ -3,17 +3,24 @@ package net.ltxprogrammer.changed.mixin.entity;
 import net.ltxprogrammer.changed.ability.AbstractAbility;
 import net.ltxprogrammer.changed.block.WearableBlock;
 import net.ltxprogrammer.changed.block.WhiteLatexTransportInterface;
-import net.ltxprogrammer.changed.entity.LatexType;
-import net.ltxprogrammer.changed.entity.LivingEntityDataExtension;
+import net.ltxprogrammer.changed.entity.*;
 import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.fluid.AbstractLatexFluid;
+import net.ltxprogrammer.changed.fluid.Gas;
+import net.ltxprogrammer.changed.fluid.TransfurGas;
 import net.ltxprogrammer.changed.init.ChangedAbilities;
+import net.ltxprogrammer.changed.init.ChangedAttributes;
+import net.ltxprogrammer.changed.init.ChangedItems;
 import net.ltxprogrammer.changed.init.ChangedTags;
+import net.ltxprogrammer.changed.item.ExtendedItemProperties;
 import net.ltxprogrammer.changed.item.SpecializedAnimations;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.EntityUtil;
 import net.ltxprogrammer.changed.util.LocalUtil;
+import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
@@ -22,10 +29,13 @@ import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.state.BlockState;
@@ -39,11 +49,15 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import javax.annotation.Nullable;
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin extends Entity implements LivingEntityDataExtension {
@@ -104,15 +118,14 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntityDa
     @Inject(method = "hasEffect", at = @At("HEAD"), cancellable = true)
     public void hasEffect(MobEffect effect, CallbackInfoReturnable<Boolean> callback) {
         ProcessTransfur.ifPlayerTransfurred(EntityUtil.playerOrNull(this), (player, variant) -> {
+            if (variant.getParent().visionType.test(effect))
+                callback.setReturnValue(true);
+
             if (effect.equals(MobEffects.NIGHT_VISION)) {
-                if (variant.getParent().nightVision)
-                    callback.setReturnValue(true);
                 if (variant.getChangedEntity().getLatexType() == LatexType.WHITE_LATEX && WhiteLatexTransportInterface.isEntityInWhiteLatex(player))
                     callback.setReturnValue(true);
             }
             if (variant.getParent().breatheMode.canBreatheWater() && effect.equals(MobEffects.CONDUIT_POWER) && isEyeInFluid(FluidTags.WATER))
-                callback.setReturnValue(true);
-            if (variant.getParent().noVision && effect.equals(MobEffects.BLINDNESS))
                 callback.setReturnValue(true);
         });
     }
@@ -120,16 +133,15 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntityDa
     @Inject(method = "getEffect", at = @At("HEAD"), cancellable = true)
     public void getEffect(MobEffect effect, CallbackInfoReturnable<MobEffectInstance> callback) {
         ProcessTransfur.ifPlayerTransfurred(EntityUtil.playerOrNull(this), (player, variant) -> {
+            if (variant.getParent().visionType.test(effect))
+                callback.setReturnValue(new MobEffectInstance(effect, 300, 1, false, false));
+
             if (effect.equals(MobEffects.NIGHT_VISION)) {
-                if (variant.getParent().nightVision)
-                    callback.setReturnValue(new MobEffectInstance(MobEffects.NIGHT_VISION, 300, 1, false, false));
                 if (variant.getChangedEntity().getLatexType() == LatexType.WHITE_LATEX && WhiteLatexTransportInterface.isEntityInWhiteLatex(player))
                     callback.setReturnValue(new MobEffectInstance(MobEffects.NIGHT_VISION, 300, 1, false, false));
             }
             if (variant.getParent().breatheMode.canBreatheWater() && effect.equals(MobEffects.CONDUIT_POWER) && isEyeInFluid(FluidTags.WATER))
                 callback.setReturnValue(new MobEffectInstance(MobEffects.CONDUIT_POWER, 300, 1, false, false));
-            if (variant.getParent().noVision && effect.equals(MobEffects.BLINDNESS))
-                callback.setReturnValue(new MobEffectInstance(MobEffects.BLINDNESS, 300, 1, false, false));
         });
     }
 
@@ -158,6 +170,40 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntityDa
         }
     }
 
+    @Unique @Nullable private Gas eyeInGas = null;
+
+    private void checkForGas() {
+        eyeInGas = null;
+        // Code from Entity.updateFluidOnEyes()
+        double yCheck = this.getEyeY() - 0.11111111;
+
+        BlockPos blockpos = new BlockPos(this.getX(), yCheck, this.getZ());
+        FluidState fluidstate = this.level.getFluidState(blockpos);
+        double yFluid = ((float)blockpos.getY() + fluidstate.getHeight(this.level, blockpos));
+        if (yFluid > yCheck && fluidstate.getType() instanceof Gas transfurGas)
+            eyeInGas = transfurGas;
+    }
+
+    @Override
+    public <T extends Gas> Optional<T> isEyeInGas(Class<T> clazz) {
+        return Optional.ofNullable(eyeInGas).flatMap(gas -> {
+            if (clazz.isAssignableFrom(gas.getClass()))
+                return Optional.of((T)gas);
+            else
+                return Optional.empty();
+        });
+    }
+
+    @Override
+    public void do_hurtCurrentlyUsedShield(float blocked) {
+        this.hurtCurrentlyUsedShield(blocked);
+    }
+
+    @Override
+    public void do_blockUsingShield(LivingEntity attacker) {
+        this.blockUsingShield(attacker);
+    }
+
     @Inject(method = "tick", at = @At("HEAD"))
     public void tick(CallbackInfo callback) {
         if (controlDisabledFor > 0) {
@@ -166,8 +212,8 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntityDa
                 move.setWantedPosition(move.getWantedX(), move.getWantedY(), move.getWantedZ(), move.getSpeedModifier());
             }
 
-            if ((Entity)this instanceof Player player)
-                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> LocalUtil.mulInputImpulse(player, 0.05F));
+            /*if ((Entity)this instanceof Player player)
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> LocalUtil.mulInputImpulse(player, 0.05F));*/
 
             --controlDisabledFor;
         }
@@ -178,6 +224,8 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntityDa
             if (grabbedBy instanceof Player player && player.isSpectator())
                 grabbedBy = null;
         }
+
+        this.checkForGas();
     }
 
     @Inject(method = "canStandOnFluid", at = @At("HEAD"), cancellable = true)
@@ -190,6 +238,20 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntityDa
             callback.setReturnValue(true);
     }
 
+    @Inject(method = "breakItem", at = @At("HEAD"), cancellable = true)
+    public void useDifferentBreakSound(ItemStack itemStack, CallbackInfo ci) {
+        if (!(itemStack.getItem() instanceof ExtendedItemProperties extended) || itemStack.isEmpty())
+            return;
+
+        if (!this.isSilent()) {
+            this.level.playLocalSound(this.getX(), this.getY(), this.getZ(), extended.getBreakSound(itemStack), this.getSoundSource(), 0.8F, 0.8F + this.level.random.nextFloat() * 0.4F, false);
+        }
+
+        this.spawnItemParticles(itemStack, 5);
+
+        ci.cancel();
+    }
+
     @Shadow public abstract boolean canStandOnFluid(FluidState state);
     @Shadow public abstract boolean isEffectiveAi();
     @Shadow public abstract boolean hasEffect(MobEffect effect);
@@ -197,6 +259,14 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntityDa
     @Shadow protected abstract boolean isAffectedByFluids();
     @Shadow public abstract Vec3 getFluidFallingAdjustedMovement(double d0, boolean flag, Vec3 movement);
     @Shadow(remap = false) @Final private static AttributeModifier SLOW_FALLING;
+
+    @Shadow public abstract ItemStack getItemBySlot(EquipmentSlot p_21127_);
+
+    @Shadow protected abstract void spawnItemParticles(ItemStack p_21061_, int p_21062_);
+
+    @Shadow protected abstract void hurtCurrentlyUsedShield(float p_21316_);
+
+    @Shadow protected abstract void blockUsingShield(LivingEntity p_21200_);
 
     @Unique private boolean isInLatex() {
         return !this.firstTick && this.fluidHeight.getDouble(ChangedTags.Fluids.LATEX) > 0.0D;
@@ -258,5 +328,15 @@ public abstract class LivingEntityMixin extends Entity implements LivingEntityDa
             callback.cancel();
             return;
         }
+    }
+
+    @Inject(method = "createLivingAttributes", at = @At("RETURN"))
+    private static void addChangedAttributes(CallbackInfoReturnable<AttributeSupplier.Builder> cir) {
+        cir.getReturnValue().add(ChangedAttributes.TRANSFUR_TOLERANCE.get());
+    }
+
+    @Inject(method = "increaseAirSupply", at = @At("HEAD"), cancellable = true)
+    private void maybeAddAir(int current, CallbackInfoReturnable<Integer> cir) {
+        TransfurGas.validEntityInGas((LivingEntity)(Object)this).ifPresent(gas -> cir.setReturnValue(current));
     }
 }

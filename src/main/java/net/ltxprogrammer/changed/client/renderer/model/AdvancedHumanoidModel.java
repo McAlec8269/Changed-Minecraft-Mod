@@ -1,6 +1,7 @@
 package net.ltxprogrammer.changed.client.renderer.model;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.ltxprogrammer.changed.client.FormRenderHandler;
 import net.ltxprogrammer.changed.client.ModelPartStem;
 import net.ltxprogrammer.changed.client.PoseStackExtender;
 import net.ltxprogrammer.changed.client.renderer.animate.HumanoidAnimator;
@@ -11,6 +12,7 @@ import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.minecraft.client.model.ArmedModel;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.HeadedModel;
+import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.builders.CubeDeformation;
 import net.minecraft.world.entity.HumanoidArm;
@@ -18,16 +20,38 @@ import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public abstract class AdvancedHumanoidModel<T extends ChangedEntity> extends EntityModel<T> implements ArmedModel, HeadedModel, TorsoedModel {
+public abstract class AdvancedHumanoidModel<T extends ChangedEntity> extends PlayerModel<T> implements ArmedModel, HeadedModel, TorsoedModel {
     public static final CubeDeformation NO_DEFORMATION = CubeDeformation.NONE;
     public static final CubeDeformation TEXTURE_DEFORMATION = new CubeDeformation(-0.01F);
+    protected static final ModelPart NULL_PART = new ModelPart(List.of(), Map.of());
 
     protected final ModelPart rootModelPart;
 
+    public static ModelPart createNullPart(String... children) {
+        return new ModelPart(List.of(), Arrays.stream(children).collect(Collectors.toMap(
+                Function.identity(),
+                name -> new ModelPart(List.of(), Map.of())
+        )));
+    }
+
     public AdvancedHumanoidModel(ModelPart root) {
+        super(createNullPart("head", "hat", "body", "right_arm", "left_arm", "right_leg", "left_leg",
+                "ear", "cloak", "left_sleeve", "right_sleeve", "left_pants", "right_pants", "jacket"), false);
         this.rootModelPart = root;
+    }
+
+    public void syncPropertyModel() {
+        if (this instanceof AdvancedHumanoidModelInterface<?,?> modelInterface)
+            modelInterface.getAnimator().writePropertyModel(this);
+    }
+
+    public PlayerModel<?> preparePropertyModel() {
+        syncPropertyModel();
+        return this;
     }
 
     public void prepareMobModel(HumanoidAnimator<T, ? extends EntityModel<T>> animator, T entity, float p_102862_, float p_102863_, float partialTicks) {
@@ -44,6 +68,8 @@ public abstract class AdvancedHumanoidModel<T extends ChangedEntity> extends Ent
             getHead().visible = true;
             getTorso().visible = true;
         }
+
+        this.syncPropertyModel();
     }
 
     public PoseStack.Pose resetPoseStack = null;
@@ -62,16 +88,18 @@ public abstract class AdvancedHumanoidModel<T extends ChangedEntity> extends Ent
         ProcessTransfur.ifPlayerTransfurred(entity.getUnderlyingPlayer(), variant -> {
             if (variant.transfurProgression < 1f) {
                 final var instance = cachedAnimationInstance.computeIfAbsent(entity, e -> {
-                    final var anim = TransfurAnimations.getAnimationFromCause(variant.cause);
+                    final var anim = TransfurAnimations.getAnimationFromCause(variant.transfurContext.cause);
                     return anim != null ? anim.createInstance(this) : null;
                 });
 
-                if (instance != null)
-                    instance.animate(this, variant.getTransfurProgression(ageInTicks) * variant.cause.getDuration());
+                if (instance != null && !FormRenderHandler.isRenderingHand())
+                    instance.animate(this, variant.getTransfurProgression(ageInTicks) * variant.transfurContext.cause.getDuration());
             } else {
                 cachedAnimationInstance.remove(entity);
             }
         });
+
+        this.syncPropertyModel();
     }
 
     public abstract ModelPart getArm(HumanoidArm arm);
@@ -84,6 +112,8 @@ public abstract class AdvancedHumanoidModel<T extends ChangedEntity> extends Ent
             case TORSO -> TransfurHelper.getTailedTorso();
             case LEFT_LEG -> TransfurHelper.getDigitigradeLeftLeg();
             case RIGHT_LEG -> TransfurHelper.getDigitigradeRightLeg();
+            case LEFT_ARM -> TransfurHelper.getBasicLeftArm();
+            case RIGHT_ARM -> TransfurHelper.getBasicRightArm();
             default -> null;
         };
     }
@@ -145,35 +175,5 @@ public abstract class AdvancedHumanoidModel<T extends ChangedEntity> extends Ent
         EMPTY,
         REACH,
         HOLD
-    }
-
-    public static abstract class LatexRemodel<T extends ChangedEntity, M extends EntityModel<T>> extends AdvancedHumanoidModel<T> implements AdvancedHumanoidModelInterface<T, M> {
-        public LatexRemodel(ModelPart root) {
-            super(root);
-        }
-
-        @Override
-        public final void prepareMobModel(@NotNull T p_102861_, float p_102862_, float p_102863_, float p_102864_) {
-            this.prepareMobModel(getAnimator(), p_102861_, p_102862_, p_102863_, p_102864_);
-        }
-
-        @Override
-        public final void setupHand() {
-            getAnimator().setupHand();
-        }
-
-        @Override
-        public final void setupAnim(T entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch) {
-            getAnimator().setupAnim(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
-            super.setupAnim(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
-        }
-
-        @Override
-        public PoseStack getPlacementCorrectors(CorrectorType type) {
-            PoseStack stack = AdvancedHumanoidModelInterface.super.getPlacementCorrectors(type);
-            if (type.isArm())
-                stack.translate(0.10 * (type == CorrectorType.RIGHT_ARM ? -1 : 1), -0.20, 0.0);
-            return stack;
-        }
     }
 }

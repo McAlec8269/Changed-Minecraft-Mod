@@ -2,20 +2,21 @@ package net.ltxprogrammer.changed.client.renderer.model.armor;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.ltxprogrammer.changed.client.PoseStackExtender;
-import net.ltxprogrammer.changed.client.renderer.animate.HumanoidAnimator;
+import net.ltxprogrammer.changed.client.renderer.model.AdvancedHumanoidModel;
 import net.ltxprogrammer.changed.client.renderer.model.AdvancedHumanoidModelInterface;
+import net.ltxprogrammer.changed.client.tfanimations.HelperModel;
+import net.ltxprogrammer.changed.client.tfanimations.Limb;
+import net.ltxprogrammer.changed.client.tfanimations.TransfurHelper;
 import net.ltxprogrammer.changed.entity.ChangedEntity;
 import net.ltxprogrammer.changed.item.Shorts;
-import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.geom.PartPose;
 import net.minecraft.client.model.geom.builders.CubeListBuilder;
 import net.minecraft.client.model.geom.builders.PartDefinition;
+import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
@@ -24,29 +25,54 @@ import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Map;
 
-public abstract class LatexHumanoidArmorModel<T extends ChangedEntity, M extends EntityModel<T>> extends EntityModel<T> implements AdvancedHumanoidModelInterface<T, M> {
+public abstract class LatexHumanoidArmorModel<T extends ChangedEntity, M extends AdvancedHumanoidModel<T>> extends AdvancedHumanoidModel<T> implements AdvancedHumanoidModelInterface<T, M> {
     public static final ModelPart EMPTY_PART = new ModelPart(List.of(), Map.of());
-    public abstract void renderForSlot(T entity, ItemStack stack, EquipmentSlot slot,
-            PoseStack poseStack, VertexConsumer buffer, int packedLight, int packedOverlay, float red, float green, float blue, float alpha);
+    public final ArmorModel armorModel;
 
-    protected static void prepareLegsForArmor(ItemStack stack, ModelPart LeftLeg, ModelPart RightLeg) {
-        prepareLegsForArmor(stack, LeftLeg, RightLeg, null);
+    public LatexHumanoidArmorModel(ModelPart root, ArmorModel model) {
+        super(root);
+        this.armorModel = model;
     }
 
-    protected static void prepareLegsForArmor(ItemStack stack, ModelPart LeftLeg, ModelPart RightLeg, @Nullable ModelPart Tail) {
+    public void scaleForSlot(RenderLayerParent<T, ?> parent, EquipmentSlot slot, PoseStack poseStack) {
+        switch (slot) {
+            case HEAD -> {
+                if (parent.getModel() instanceof AdvancedHumanoidModelInterface<?,?> modelInterface)
+                    modelInterface.scaleForHead(poseStack);
+            }
+            case CHEST, LEGS, FEET -> {
+                if (parent.getModel() instanceof AdvancedHumanoidModelInterface<?,?> modelInterface)
+                    modelInterface.scaleForBody(poseStack);
+            }
+        }
+    }
+
+    public abstract void renderForSlot(T entity, RenderLayerParent<T, ?> parent, ItemStack stack, EquipmentSlot slot,
+                                       PoseStack poseStack, VertexConsumer buffer, int packedLight, int packedOverlay, float red, float green, float blue, float alpha);
+
+    public static void prepareUnifiedLegsForArmor(ItemStack stack, ModelPart LeftLeg, ModelPart RightLeg) {
+        prepareUnifiedLegsForArmor(stack, LeftLeg, RightLeg, null);
+    }
+
+    public static void prepareUnifiedLegsForArmor(ItemStack stack, ModelPart LeftLeg, ModelPart RightLeg, @Nullable ModelPart Tail) {
         if (stack.getItem() instanceof Shorts) {
             setAllPartsVisibility(LeftLeg.getChild("LeftLowerLeg"), false);
             setAllPartsVisibility(RightLeg.getChild("RightLowerLeg"), false);
             if (Tail != null)
                 Tail.visible = false;
+        } else {
+            setAllPartsVisibility(LeftLeg, true);
+            setAllPartsVisibility(RightLeg, true);
+            if (Tail != null)
+                Tail.visible = true;
         }
     }
 
-    protected static void unprepareLegsForArmor(ItemStack stack, ModelPart LeftLeg, ModelPart RightLeg) {
-        unprepareLegsForArmor(stack, LeftLeg, RightLeg, null);
+    protected static void unprepareUnifiedLegsForArmor(ItemStack stack, ModelPart LeftLeg, ModelPart RightLeg) {
+        unprepareUnifiedLegsForArmor(stack, LeftLeg, RightLeg, null);
     }
 
-    protected static void unprepareLegsForArmor(ItemStack stack, ModelPart LeftLeg, ModelPart RightLeg, @Nullable ModelPart Tail) {
+    protected static void unprepareUnifiedLegsForArmor(ItemStack stack, ModelPart LeftLeg, ModelPart RightLeg, @Nullable ModelPart Tail) {
         if (stack.getItem() instanceof Shorts) {
             setAllPartsVisibility(LeftLeg, true);
             setAllPartsVisibility(RightLeg, true);
@@ -85,30 +111,6 @@ public abstract class LatexHumanoidArmorModel<T extends ChangedEntity, M extends
         PartDefinition LeftPad = LeftFoot.addOrReplaceChild("LeftPad", CubeListBuilder.create().texOffs(21, 21).addBox(-2.0F, 0.0F, -2.5F, 4.0F, 2.0F, 5.0F, layer.deformation.extend(-0.25f)), PartPose.offset(0.0F, 4.325F, -4.425F));
     }
 
-    protected static void addV2Legs(PartDefinition partDefinition, ArmorModel layer) {
-        PartDefinition RightLeg = partDefinition.addOrReplaceChild("RightLeg", CubeListBuilder.create(), PartPose.offset(-2.25F, 12.0F, 0.0F));
-
-        PartDefinition leg_r1 = RightLeg.addOrReplaceChild("leg_r1", CubeListBuilder.create().texOffs(0, 16).mirror().addBox(-2.0F, -6.7987F, -2.9677F, 4.0F, 6.0F, 4.0F, layer.altDeformation).mirror(false), PartPose.offsetAndRotation(0.0F, 5.275F, 4.9F, 1.2217F, 0.0F, 0.0F));
-
-        PartDefinition thigh_r1 = RightLeg.addOrReplaceChild("thigh_r1", CubeListBuilder.create().texOffs(0, 16).addBox(-2.0F, 0.0F, -2.0F, 4.0F, 6.0F, 4.0F, layer.altDeformation.extend(0.05F)), PartPose.offsetAndRotation(0.0F, -0.1F, 0.0F, -0.0873F, 0.0F, 0.0F));
-
-        PartDefinition RightLower = RightLeg.addOrReplaceChild("RightLower", CubeListBuilder.create(), PartPose.offset(0.0F, 4.0F, 4.5F));
-
-        PartDefinition leg_r2 = RightLower.addOrReplaceChild("leg_r2", CubeListBuilder.create().texOffs(0, 16).addBox(-2.0F, 7.775F, -3.0F, 4.0F, 0.0F, 4.0F, layer.dualDeformation.extend(0.025F))
-                .texOffs(0, layer == ArmorModel.OUTER ? 20 : 16).addBox(-2.0F, -0.225F, -3.0F, 4.0F, 8.0F, 4.0F, layer.dualDeformation.extend(0.025F)), PartPose.offsetAndRotation(0.0F, 0.15F, -1.0F, -0.0873F, 0.0F, 0.0F));
-
-        PartDefinition LeftLeg = partDefinition.addOrReplaceChild("LeftLeg", CubeListBuilder.create(), PartPose.offset(2.25F, 12.0F, 0.0F));
-
-        PartDefinition leg_r3 = LeftLeg.addOrReplaceChild("leg_r3", CubeListBuilder.create().texOffs(0, 16).mirror().addBox(-2.0F, -6.7987F, -2.9677F, 4.0F, 6.0F, 4.0F, layer.altDeformation).mirror(false), PartPose.offsetAndRotation(0.0F, 5.275F, 4.9F, 1.2217F, 0.0F, 0.0F));
-
-        PartDefinition thigh_r2 = LeftLeg.addOrReplaceChild("thigh_r2", CubeListBuilder.create().texOffs(0, 16).mirror().addBox(-2.0F, 0.0F, -2.0F, 4.0F, 6.0F, 4.0F, layer.altDeformation.extend(0.05F)).mirror(false), PartPose.offsetAndRotation(0.0F, -0.1F, 0.0F, -0.0873F, 0.0F, 0.0F));
-
-        PartDefinition LeftLower = LeftLeg.addOrReplaceChild("LeftLower", CubeListBuilder.create(), PartPose.offset(0.0F, 4.0F, 4.5F));
-
-        PartDefinition leg_r4 = LeftLower.addOrReplaceChild("leg_r4", CubeListBuilder.create().texOffs(0, 16).mirror().addBox(-2.0F, 7.775F, -3.0F, 4.0F, 0.0F, 4.0F, layer.dualDeformation.extend(0.025F)).mirror(false)
-                .texOffs(0, layer == ArmorModel.OUTER ? 20 : 16).mirror().addBox(-2.0F, -0.225F, -3.0F, 4.0F, 8.0F, 4.0F, layer.dualDeformation.extend(0.025F)).mirror(false), PartPose.offsetAndRotation(0.0F, 0.15F, -1.0F, -0.0873F, 0.0F, 0.0F));
-    }
-
     protected float distanceTo(@NotNull T entity, @NotNull Entity other, float partialTicks) {
         Vec3 entityPos = entity.getPosition(partialTicks);
         Vec3 otherPos = other.getPosition(partialTicks);
@@ -116,11 +118,6 @@ public abstract class LatexHumanoidArmorModel<T extends ChangedEntity, M extends
         float f1 = (float)(entityPos.y - otherPos.y);
         float f2 = (float)(entityPos.z - otherPos.z);
         return Mth.sqrt(f * f + f1 * f1 + f2 * f2);
-    }
-
-    public void prepareMobModel(HumanoidAnimator<T, M> animator, T entity, float p_102862_, float p_102863_, float partialTicks) {
-        super.prepareMobModel(entity, p_102862_, p_102863_, partialTicks);
-        animator.setupVariables(entity, partialTicks);
     }
 
     @Override
@@ -131,6 +128,7 @@ public abstract class LatexHumanoidArmorModel<T extends ChangedEntity, M extends
     @Override
     public void setupAnim(@NotNull T entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch) {
         getAnimator().setupAnim(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
+        super.setupAnim(entity, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
     }
 
     public static void setAllPartsVisibility(ModelPart part, boolean visible) {
@@ -145,18 +143,15 @@ public abstract class LatexHumanoidArmorModel<T extends ChangedEntity, M extends
 
     }
 
-    @Override
-    public final ModelPart getArm(HumanoidArm arm) {
-        return null;
+    @Nullable
+    public HelperModel getTransfurHelperModel(Limb limb) {
+        return switch (limb) {
+            case LEFT_LEG -> TransfurHelper.getDigitigradeLeftLeg(this.armorModel);
+            case RIGHT_LEG -> TransfurHelper.getDigitigradeRightLeg(this.armorModel);
+            default -> null;
+        };
     }
 
-    public PoseStack.Pose resetPoseStack = null;
-    protected void swapResetPoseStack(PoseStack poseStack) {
-        // This function is to maybe reset any poseStack changes for exception case models (im looking at you centaur)
-        if (resetPoseStack != null && poseStack instanceof PoseStackExtender extender) {
-            var copied = extender.copyLast();
-            extender.setPose(resetPoseStack);
-            resetPoseStack = copied;
-        }
-    }
+    public void prepareVisibility(EquipmentSlot armorSlot, ItemStack item) {}
+    public void unprepareVisibility(EquipmentSlot armorSlot, ItemStack item) {}
 }

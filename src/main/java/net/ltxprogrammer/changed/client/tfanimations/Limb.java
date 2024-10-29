@@ -1,9 +1,6 @@
 package net.ltxprogrammer.changed.client.tfanimations;
 
-import net.ltxprogrammer.changed.client.renderer.model.AdvancedHumanoidModel;
-import net.ltxprogrammer.changed.client.renderer.model.DoubleArmedModel;
-import net.ltxprogrammer.changed.client.renderer.model.LeglessModel;
-import net.ltxprogrammer.changed.client.renderer.model.LowerTorsoedModel;
+import net.ltxprogrammer.changed.client.renderer.model.*;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.world.entity.HumanoidArm;
@@ -19,12 +16,27 @@ public enum Limb {
     RIGHT_ARM(model -> model.rightArm, model -> model.getArm(HumanoidArm.RIGHT)),
 
     LEFT_ARM2(model -> model.leftArm, model -> {
+        if (model instanceof TripleArmedModel tripleArmedModel)
+            return tripleArmedModel.getMiddleArm(HumanoidArm.LEFT);
         if (model instanceof DoubleArmedModel doubleArmedModel)
             return doubleArmedModel.getOtherArm(HumanoidArm.LEFT);
         return null;
     }, false),
     RIGHT_ARM2(model -> model.rightArm, model -> {
+        if (model instanceof TripleArmedModel tripleArmedModel)
+            return tripleArmedModel.getMiddleArm(HumanoidArm.RIGHT);
         if (model instanceof DoubleArmedModel doubleArmedModel)
+            return doubleArmedModel.getOtherArm(HumanoidArm.RIGHT);
+        return null;
+    }, false),
+
+    LEFT_ARM3(model -> model.leftArm, model -> {
+        if (model instanceof TripleArmedModel doubleArmedModel)
+            return doubleArmedModel.getOtherArm(HumanoidArm.LEFT);
+        return null;
+    }, false),
+    RIGHT_ARM3(model -> model.rightArm, model -> {
+        if (model instanceof TripleArmedModel doubleArmedModel)
             return doubleArmedModel.getOtherArm(HumanoidArm.RIGHT);
         return null;
     }, false),
@@ -86,14 +98,5 @@ public enum Limb {
 
     public boolean isVanillaPart() {
         return isVanillaPart;
-    }
-
-    public TransfurAnimator.ModelPose adjustModelPose(TransfurAnimator.ModelPose pose) {
-        if (this == ABDOMEN)
-            return pose.translate(0.0f, 12.0f, 0.0f);
-        else if (this == LOWER_TORSO)
-            return pose.translate(0.0f, 12.0f, 0.0f);
-        else
-            return pose;
     }
 }

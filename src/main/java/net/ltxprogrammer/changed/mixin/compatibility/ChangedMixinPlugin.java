@@ -13,9 +13,14 @@ import java.util.Set;
 
 public class ChangedMixinPlugin implements IMixinConfigPlugin {
     private static final Map<String, String> MOD_ID_MAP = new ImmutableMap.Builder<String, String>()
+            .put("net.ltxprogrammer.changed.mixin.compatibility.BeyondEarth", "beyond_earth")
+            .put("net.ltxprogrammer.changed.mixin.compatibility.CarryOn", "carryon")
             .put("net.ltxprogrammer.changed.mixin.compatibility.CGM", "cgm")
+            .put("net.ltxprogrammer.changed.mixin.compatibility.ChiselsAndBits", "chiselsandbits")
+            .put("net.ltxprogrammer.changed.mixin.compatibility.CTM", "ctm")
             .put("net.ltxprogrammer.changed.mixin.compatibility.FirstPerson", "firstperson")
             .put("net.ltxprogrammer.changed.mixin.compatibility.HardcoreRevival", "hardcorerevival")
+            .put("net.ltxprogrammer.changed.mixin.compatibility.Leashed", "leashed")
             .put("net.ltxprogrammer.changed.mixin.compatibility.Moonlight", "selene")
             .put("net.ltxprogrammer.changed.mixin.compatibility.NotEnoughAnimations", "notenoughanimations")
             .put("net.ltxprogrammer.changed.mixin.compatibility.Oculus", "oculus")
@@ -23,7 +28,8 @@ public class ChangedMixinPlugin implements IMixinConfigPlugin {
             .put("net.ltxprogrammer.changed.mixin.compatibility.PlayerAnimator", "playeranimator")
             .put("net.ltxprogrammer.changed.mixin.compatibility.PresenceFootsteps", "presencefootsteps")
             .put("net.ltxprogrammer.changed.mixin.compatibility.Rubidium", "rubidium")
-            .put("net.ltxprogrammer.changed.mixin.compatibility.Vivecraft", "vivecraft").build();
+            .put("net.ltxprogrammer.changed.mixin.compatibility.Vivecraft", "vivecraft")
+            .put("net.ltxprogrammer.changed.mixin.compatibility.WATUT", "watut").build();
 
     private static boolean isModPresent(String modId) {
         return FMLLoader.getLoadingModList().getModFileById(modId) != null;

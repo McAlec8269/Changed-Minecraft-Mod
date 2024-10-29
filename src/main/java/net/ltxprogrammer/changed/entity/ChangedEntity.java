@@ -15,19 +15,22 @@ import net.ltxprogrammer.changed.network.syncher.ChangedEntityDataSerializers;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.Cacheable;
 import net.ltxprogrammer.changed.util.Color3;
-import net.minecraft.client.player.LocalPlayer;
+import net.ltxprogrammer.changed.util.EntityUtil;
+import net.ltxprogrammer.changed.util.UniversalDist;
+import net.minecraft.Util;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.util.Mth;
-import net.minecraft.world.Difficulty;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.entity.ai.attributes.AttributeMap;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.*;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
@@ -39,16 +42,18 @@ import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.ForgeMod;
-import net.minecraftforge.fml.loading.FMLEnvironment;
+import net.minecraftforge.common.capabilities.Capability;
+import net.minecraftforge.common.util.LazyOptional;
 import net.minecraftforge.network.NetworkHooks;
 import net.minecraftforge.registries.RegistryObject;
 import org.jetbrains.annotations.NotNull;
@@ -56,7 +61,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 
 import static net.ltxprogrammer.changed.entity.variant.TransfurVariant.findEntityTransfurVariant;
@@ -86,8 +90,15 @@ public abstract class ChangedEntity extends Monster {
     final Map<SpringType.Direction, EnumMap<SpringType, SpringType.Simulator>> simulatedSprings;
 
     public BasicPlayerInfo getBasicPlayerInfo() {
-        if (underlyingPlayer instanceof PlayerDataExtension ext)
+        if (underlyingPlayer instanceof PlayerDataExtension ext) {
+            var variant = ext.getTransfurVariant();
+            if (variant != null && variant.isTemporaryFromSuit()) {
+                if (underlyingPlayer instanceof LivingEntityDataExtension lExt && lExt.getGrabbedBy() instanceof PlayerDataExtension gExt) {
+                    return gExt.getBasicPlayerInfo();
+                }
+            }
             return ext.getBasicPlayerInfo();
+        }
         else
             return this.entityData.get(DATA_LOCAL_VARIANT_INFO);
     }
@@ -277,7 +288,7 @@ public abstract class ChangedEntity extends Monster {
 
     public boolean shouldShowName() {
         return underlyingPlayer != null && underlyingPlayer.level.isClientSide ?
-                FMLEnvironment.dist == Dist.CLIENT && !(underlyingPlayer instanceof LocalPlayer) : super.isCustomNameVisible();
+                !UniversalDist.isLocalPlayer(this.getUnderlyingPlayer()) : super.shouldShowName();
     }
 
     public ItemStack getUseItem() {
@@ -328,6 +339,10 @@ public abstract class ChangedEntity extends Monster {
                 underlyingPlayer.isAutoSpinAttack();
     }
 
+    public int getDepthStriderLevel() {
+        return 0;
+    }
+
     @Override
     protected boolean canEnterPose(Pose pose) {
         if (overridePose != null && overridePose != pose)
@@ -335,10 +350,16 @@ public abstract class ChangedEntity extends Monster {
         return super.canEnterPose(pose);
     }
 
+    @Override
+    @NotNull
+    public AABB getBoundingBoxForPose(@NotNull Pose pose) {
+        return super.getBoundingBoxForPose(pose);
+    }
+
     public EntityDimensions getDimensions(Pose pose) {
         EntityDimensions core = this.getType().getDimensions();
 
-        if (WhiteLatexTransportInterface.isEntityInWhiteLatex(this) || WhiteLatexTransportInterface.isEntityInWhiteLatex(this.getUnderlyingPlayer()))
+        if (WhiteLatexTransportInterface.isEntityInWhiteLatex(this.maybeGetUnderlying()))
             return EntityDimensions.scalable(core.width, core.width);
 
         return (switch (Objects.requireNonNullElse(overridePose, pose)) {
@@ -375,16 +396,41 @@ public abstract class ChangedEntity extends Monster {
         }
     }
 
-    public static <T extends ChangedEntity> boolean checkEntitySpawnRules(EntityType<T> entityType, ServerLevelAccessor world, MobSpawnType reason, BlockPos pos, Random random) {
-        if (world.getDifficulty() == Difficulty.PEACEFUL)
+    protected static boolean checkSpawnBlock(ServerLevelAccessor world, MobSpawnType reason, BlockPos pos) {
+        if (reason != MobSpawnType.NATURAL)
+            return true;
+        int index = 3;
+        do {
+            final BlockPos thisPos = pos;
+            BlockState state = world.getBlockState(thisPos);
+            pos = thisPos.below();
+            if (state.is(ChangedTags.Blocks.LATEX_SPAWNABLE_ON))
+                return true;
+            if (state.isAir() || !state.isCollisionShapeFullBlock(world, thisPos))
+                continue;
             return false;
-        if (!isDarkEnoughToSpawn(world, pos, random))
-            return false;
-        return Mob.checkMobSpawnRules(entityType, world, reason, pos, random);
+        } while (index-- > 0);
+
+        return false;
     }
 
-    public static <T extends ChangedEntity> ChangedEntities.VoidConsumer getInit(RegistryObject<EntityType<T>> registryObject, SpawnPlacements.Type spawnPlacement) {
-        return () -> SpawnPlacements.register(registryObject.get(), spawnPlacement, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, ChangedEntity::checkEntitySpawnRules);
+    public static <T extends ChangedEntity> boolean checkEntitySpawnRules(EntityType<T> entityType, ServerLevelAccessor world, MobSpawnType reason, BlockPos pos, Random random) {
+        if (pos.getY() < world.getSeaLevel() - 10)
+            return false;
+        if (random.nextFloat() > 0.5f)
+            return false;
+        if (!checkSpawnBlock(world, reason, pos))
+            return false;
+        return Monster.checkAnyLightMonsterSpawnRules(entityType, world, reason, pos, random);
+    }
+
+    @Override
+    public float getWalkTargetValue(BlockPos p_33013_, LevelReader p_33014_) {
+        return 0.0f;
+    }
+
+    public static <T extends ChangedEntity> ChangedEntities.VoidConsumer getInit(RegistryObject<EntityType<T>> registryObject, SpawnPlacements.Type spawnPlacement, SpawnPlacements.SpawnPredicate<T> spawnPredicate) {
+        return () -> SpawnPlacements.register(registryObject.get(), spawnPlacement, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, spawnPredicate);
     }
 
     public TransfurVariant<?> getTransfurVariant() {
@@ -417,17 +463,15 @@ public abstract class ChangedEntity extends Monster {
         }
     }
 
+    public static AttributeSupplier.Builder createLatexAttributes() {
+        return Monster.createMonsterAttributes().add(ChangedAttributes.TRANSFUR_DAMAGE.get(), 3.0D);
+    }
+
     protected void setAttributes(AttributeMap attributes) {
-        attributes.getInstance(Attributes.MAX_HEALTH).setBaseValue(getTransfurMaxHealth());
+        attributes.getInstance(Attributes.MAX_HEALTH).setBaseValue(24.0);
         attributes.getInstance(Attributes.FOLLOW_RANGE).setBaseValue(40.0);
-        if (this instanceof LatexBenignWolf) attributes.getInstance(Attributes.FOLLOW_RANGE).setBaseValue(4.0);
-        if (this instanceof DarkLatexEntity) attributes.getInstance(Attributes.FOLLOW_RANGE).setBaseValue(25.0);
-        if (this instanceof WhiteLatexEntity) attributes.getInstance(Attributes.FOLLOW_RANGE).setBaseValue(16.0);
-        if (this instanceof MilkPudding) attributes.getInstance(Attributes.FOLLOW_RANGE).setBaseValue(12.0);
-        if (this instanceof LatexRaccoon) attributes.getInstance(Attributes.FOLLOW_RANGE).setBaseValue(8.0);
-        if (this instanceof HeadlessKnight) attributes.getInstance(Attributes.FOLLOW_RANGE).setBaseValue(8.0);
-        attributes.getInstance(Attributes.MOVEMENT_SPEED).setBaseValue(getTransfurLandSpeed());
-        attributes.getInstance(ForgeMod.SWIM_SPEED.get()).setBaseValue(getTransfurSwimSpeed());
+        attributes.getInstance(Attributes.MOVEMENT_SPEED).setBaseValue(1.0);
+        attributes.getInstance(ForgeMod.SWIM_SPEED.get()).setBaseValue(1.0);
         attributes.getInstance(Attributes.ATTACK_DAMAGE).setBaseValue(3.0);
         attributes.getInstance(Attributes.ARMOR).setBaseValue(4.0);
     }
@@ -458,15 +502,17 @@ public abstract class ChangedEntity extends Monster {
                 return false;
         }
 
-        for (var checkVariant : TransfurVariant.MOB_FUSION_LATEX_FORMS) {
-            if (ChangedRegistry.TRANSFUR_VARIANT.get().getValue(checkVariant).isFusionOf(getSelfVariant(), livingEntity.getClass()))
-                return true;
-        }
+        TransfurVariant<?> playerVariant = TransfurVariant.getEntityVariant(livingEntity);
+        TransfurVariant<?> selfVariant = getSelfVariant();
+        if (TransfurVariant.getPublicTransfurVariants().anyMatch(possibleFusion ->
+                possibleFusion.isFusionOf(selfVariant, livingEntity.getClass()) ||
+                possibleFusion.isFusionOf(playerVariant, this.getClass())
+        ))
+            return true;
         if (!livingEntity.getType().is(ChangedTags.EntityTypes.HUMANOIDS) && !(livingEntity instanceof ChangedEntity))
             return false;
         if (getLatexType().isHostileTo(LatexType.getEntityLatexType(livingEntity)))
             return true;
-        TransfurVariant<?> playerVariant = TransfurVariant.getEntityVariant(livingEntity);
         if (livingEntity instanceof Player player) {
             if (!livingEntity.level.getGameRules().getBoolean(ChangedGameRules.RULE_NPC_WANT_FUSE_PLAYER))
                 return false;
@@ -474,12 +520,270 @@ public abstract class ChangedEntity extends Monster {
             if (instance != null && instance.ageAsVariant > livingEntity.level.getGameRules().getInt(ChangedGameRules.RULE_FUSABILITY_DURATION_PLAYER))
                 return false;
         }
-        for (var checkVariant : TransfurVariant.FUSION_LATEX_FORMS) {
-            if (ChangedRegistry.TRANSFUR_VARIANT.get().getValue(checkVariant).isFusionOf(getSelfVariant(), playerVariant))
+        if (TransfurVariant.getPublicTransfurVariants().anyMatch(possibleFusion -> possibleFusion.isFusionOf(selfVariant, playerVariant)))
+            return true;
+
+        return false;
+    }
+
+    public TransfurContext getAttackContext() {
+        if (underlyingPlayer == null)
+            return TransfurContext.npcLatexAttack(this);
+        else
+            return TransfurContext.playerLatexAttack(underlyingPlayer);
+    }
+
+    private LivingEntity maybeGetUnderlying() {
+        return underlyingPlayer != null ? underlyingPlayer : this;
+    }
+
+    /**
+     * @param target entity to try to absorb
+     * @param source abstraction of the attacker
+     * @param amount damage amount
+     * @param possibleMobFusions possible fusions to absorb into
+     * @return True if the entity was absorbed, False otherwise
+     */
+    public boolean tryAbsorbTarget(LivingEntity target, IAbstractChangedEntity source, float amount, @Nullable List<TransfurVariant<?>> possibleMobFusions) {
+        if (!ProcessTransfur.willTransfur(target, amount)) {
+            ProcessTransfur.progressTransfur(target, amount, source.getTransfurVariant(), source.attack());
+            return false;
+        }
+
+        // Special scenario where source is NPC, and attacked is Player, transfur player with possible keepCon
+        if (!source.isPlayer() && target instanceof Player &&
+                ProcessTransfur.progressTransfur(target, amount, source.getTransfurVariant(), source.attack())) {
+            source.getEntity().discard();
+            return true;
+        }
+
+        if (possibleMobFusions != null && !possibleMobFusions.isEmpty()) {
+            TransfurVariant<?> mobFusionVariant = possibleMobFusions.get(source.getEntity().getRandom().nextInt(possibleMobFusions.size()));
+            if (source.getEntity() instanceof Player sourcePlayer) {
+                float beforeHealth = sourcePlayer.getHealth();
+                ProcessTransfur.setPlayerTransfurVariant(sourcePlayer, mobFusionVariant, source.attack().cause);
+                sourcePlayer.setHealth(beforeHealth);
+            }
+
+            else {
+                source.getEntity().discard();
+                source = IAbstractChangedEntity.forEntity(mobFusionVariant.getEntityType().create(source.getLevel()));
+                source.getLevel().addFreshEntity(source.getEntity());
+            }
+        }
+
+        else if (source.getSelfVariant() == null || !source.getSelfVariant().getFormId().equals(source.getTransfurVariant().getFormId())) {
+            if (source.getEntity() instanceof Player sourcePlayer) {
+                float beforeHealth = sourcePlayer.getHealth();
+                ProcessTransfur.setPlayerTransfurVariant(sourcePlayer, source.getTransfurVariant(), source.attack().cause);
+                sourcePlayer.setHealth(beforeHealth);
+            }
+
+            else {
+                source.getEntity().discard();
+                source = IAbstractChangedEntity.forEntity(source.getTransfurVariant().getEntityType().create(source.getLevel()));
+                source.getLevel().addFreshEntity(source.getEntity());
+            }
+        }
+
+        source.getEntity().heal(14.0f); // Heal 7 hearts, and teleport to old entity location
+        var pos = target.position();
+        source.getEntity().teleportTo(pos.x, pos.y, pos.z);
+        source.getEntity().setYRot(target.getYRot());
+        source.getEntity().setXRot(target.getXRot());
+
+        // Should be one-hit absorption here
+        if (target instanceof Player loserPlayer) {
+            if (!ProcessTransfur.killPlayerByAbsorption(loserPlayer, source.getEntity())) { // Failed to kill player
+                var instance = ProcessTransfur.setPlayerTransfurVariant(loserPlayer, source.getTransfurVariant(), TransfurCause.GRAB_REPLICATE, 1.0f);
+                instance.willSurviveTransfur = true;
+
+                ProcessTransfur.forceNearbyToRetarget(level, loserPlayer);
+
+                loserPlayer.heal(10.0F);
+            }
+        }
+
+        else {
+            target.discard();
+        }
+
+        ChangedSounds.broadcastSound(source.getEntity(), source.getTransfurVariant().sound, 1.0F, 1.0F);
+        return true;
+    }
+
+    public boolean tryFuseWithTarget(LivingEntity entity, IAbstractChangedEntity source, float amount) {
+        TransfurVariant<?> selfVariant = this.getSelfVariant();
+
+        var targetVariant = TransfurVariant.getEntityVariant(entity);
+        List<TransfurVariant<?>> possibleMobFusions = new ArrayList<>();
+        if (selfVariant != null && targetVariant != null) {
+            var possibleFusion = ChangedFusions.INSTANCE.getFusionsFor(selfVariant, targetVariant).toList();
+            if (possibleFusion.isEmpty())
+                return false;
+
+            if (level.isClientSide)
                 return true;
+
+            { // Check if attacker can't fuse
+                var instance = ProcessTransfur.getPlayerTransfurVariant(underlyingPlayer);
+                if (instance != null && instance.ageAsVariant > level.getGameRules().getInt(ChangedGameRules.RULE_FUSABILITY_DURATION_PLAYER))
+                    possibleFusion = List.of();
+            }
+
+            { // Check if attackee can't fuse
+                var instance = ProcessTransfur.getPlayerTransfurVariant(EntityUtil.playerOrNull(entity));
+                if (instance != null && instance.ageAsVariant > level.getGameRules().getInt(ChangedGameRules.RULE_FUSABILITY_DURATION_PLAYER))
+                    possibleFusion = List.of();
+            }
+
+            if (!possibleFusion.isEmpty()) {
+                TransfurVariant<?> fusionVariant = Util.getRandom(possibleFusion, random);
+
+                if (underlyingPlayer != null) {
+                    if (entity instanceof Player pvpLoser) {
+                        ProcessTransfur.changeTransfur(underlyingPlayer, fusionVariant);
+                        ChangedSounds.broadcastSound(underlyingPlayer, ChangedSounds.POISON, 1f, 1f);
+                        ProcessTransfur.killPlayerByAbsorption(pvpLoser, underlyingPlayer);
+                    } else {
+                        ProcessTransfur.changeTransfur(underlyingPlayer, fusionVariant);
+                        ChangedSounds.broadcastSound(underlyingPlayer, ChangedSounds.POISON, 1f, 1f);
+                        entity.discard();
+                    }
+                } else {
+                    ChangedSounds.broadcastSound(ProcessTransfur.changeTransfur(entity, fusionVariant), ChangedSounds.POISON, 1f, 1f);
+                    this.discard();
+                }
+
+                return true;
+            }
+        }
+
+        else {
+            if (selfVariant == null)
+                selfVariant = this.getTransfurVariant();
+
+            if (!level.isClientSide) {
+                ChangedFusions.INSTANCE.getFusionsFor(selfVariant, entity.getClass()).forEach(possibleMobFusions::add);
+                ChangedFusions.INSTANCE.getFusionsFor(targetVariant, this.getClass()).forEach(possibleMobFusions::add);
+            }
+
+            { // Check if attacker can't fuse
+                var instance = ProcessTransfur.getPlayerTransfurVariant(underlyingPlayer);
+                if (instance != null && instance.ageAsVariant > level.getGameRules().getInt(ChangedGameRules.RULE_FUSABILITY_DURATION_PLAYER))
+                    possibleMobFusions.clear();
+            }
+        }
+
+        // Check if attacked entity is already latexed
+        if (ProcessTransfur.hasVariant(entity)) {
+            if (!possibleMobFusions.isEmpty()) {
+                var mobFusionVariant = Util.getRandom(possibleMobFusions, random);
+
+                if (underlyingPlayer != null) {
+                    float beforeHealth = underlyingPlayer.getHealth();
+                    ProcessTransfur.setPlayerTransfurVariant(underlyingPlayer, mobFusionVariant, getAttackContext().cause);
+                    underlyingPlayer.setHealth(beforeHealth);
+                }
+
+                else if (entity instanceof Player victimPlayer) {
+                    float beforeHealth = entity.getHealth();
+                    ProcessTransfur.setPlayerTransfurVariant(victimPlayer, mobFusionVariant, getAttackContext().cause);
+                    entity.setHealth(beforeHealth);
+                    this.discard();
+                    return true;
+                }
+
+                else {
+                    source.getEntity().discard();
+                    source = IAbstractChangedEntity.forEntity(mobFusionVariant.getEntityType().create(source.getLevel()));
+                    source.getLevel().addFreshEntity(source.getEntity());
+                }
+
+                source.getEntity().heal(14.0f); // Heal 7 hearts, and teleport to old entity location
+                var pos = entity.position();
+                source.getEntity().teleportTo(pos.x, pos.y, pos.z);
+                source.getEntity().setYRot(entity.getYRot());
+                source.getEntity().setXRot(entity.getXRot());
+
+                entity.discard();
+                return true;
+            }
+
+            return false;
+        }
+
+        if (possibleMobFusions.isEmpty() && !entity.getType().is(ChangedTags.EntityTypes.HUMANOIDS)) {
+            return false;
+        }
+
+        entity.setLastHurtByMob(source.getEntity());
+        double d1 = source.getEntity().getX() - entity.getX();
+
+        double d0;
+        for(d0 = source.getEntity().getZ() - entity.getZ(); d1 * d1 + d0 * d0 < 1.0E-4D; d0 = (Math.random() - Math.random()) * 0.01D) {
+            d1 = (Math.random() - Math.random()) * 0.01D;
+        }
+
+        entity.hurtDir = (float)(Mth.atan2(d0, d1) * (double)(180F / (float)Math.PI) - (double)entity.getYRot());
+        entity.knockback((double)0.4F, d1, d0);
+
+        if(entity instanceof Player)
+            ChangedSounds.broadcastSound(entity, ChangedSounds.BLOW1, 1, entity.level.random.nextFloat() * 0.1F + 0.9F);
+
+        entity.hurt(ChangedDamageSources.entityTransfur(source), 0.0F);
+        boolean doesAbsorption = source.wantAbsorption();
+        if (!possibleMobFusions.isEmpty())
+            doesAbsorption = true;
+
+        if (!doesAbsorption) { // Replication
+            return false;
+        }
+
+        else { // Absorption
+            tryAbsorbTarget(entity, source, amount, possibleMobFusions);
+            return true;
+        }
+    }
+
+    public boolean tryTransfurTarget(Entity entity) {
+        if (!this.getType().is(ChangedTags.EntityTypes.LATEX))
+            return false;
+
+        IAbstractChangedEntity abstractChangedEntity = IAbstractChangedEntity.forEither(maybeGetUnderlying());
+        if (abstractChangedEntity == null || !abstractChangedEntity.hasTransfurMode())
+            return false;
+
+        float damage = (float)maybeGetUnderlying().getAttributeValue(ChangedAttributes.TRANSFUR_DAMAGE.get());
+        damage = ProcessTransfur.difficultyAdjustTransfurAmount(entity.level.getDifficulty(), damage);
+        TransfurVariant<?> variant = this.getTransfurVariant();
+
+        if (entity instanceof LivingEntity livingEntity) {
+            final var context = getAttackContext();
+            damage = ProcessTransfur.checkBlocked(livingEntity, damage, context.source);
+            if (tryFuseWithTarget(livingEntity, context.source, damage))
+                return true;
+
+            if (TransfurVariant.getEntityVariant(livingEntity) == null) {
+                if (livingEntity instanceof Player player) {
+                    ProcessTransfur.progressPlayerTransfur(player, damage, variant, context);
+                    return true;
+                } else if (livingEntity.getType().is(ChangedTags.EntityTypes.HUMANOIDS)) {
+                    ProcessTransfur.progressTransfur(livingEntity, damage, variant, context);
+                    return true;
+                }
+            }
         }
 
         return false;
+    }
+
+    @Override
+    public boolean doHurtTarget(Entity entity) {
+        if (!tryTransfurTarget(entity))
+            return super.doHurtTarget(entity);
+        else
+            return true;
     }
 
     @Override
@@ -503,11 +807,13 @@ public abstract class ChangedEntity extends Monster {
 
         if (this instanceof WhiteLatexEntity)
             this.targetSelector.addGoal(1, new HurtByTargetGoal(this, WhiteLatexEntity.class).setAlertOthers());
+        else if (this instanceof AbstractDarkLatexEntity)
+            this.targetSelector.addGoal(1, new HurtByTargetGoal(this, AbstractDarkLatexEntity.class).setAlertOthers());
         else
             this.targetSelector.addGoal(1, new HurtByTargetGoal(this));
 
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, ChangedEntity.class, true, this::targetSelectorTest));
-        if (!(this.getType().is(ChangedTags.EntityTypes.ORGANIC_LATEX))) {
+        if (this.getType().is(ChangedTags.EntityTypes.LATEX)) {
             this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, Player.class, true, this::targetSelectorTest));
             this.targetSelector.addGoal(4, new NearestAttackableTargetGoal<>(this, LivingEntity.class, true, this::targetSelectorTest));
         }
@@ -605,6 +911,25 @@ public abstract class ChangedEntity extends Monster {
             return super.isLeftHanded();
     }
 
+    @NotNull
+    @Override
+    public <T> LazyOptional<T> getCapability(@NotNull Capability<T> cap) {
+        if (this.underlyingPlayer != null)
+            return this.underlyingPlayer.getCapability(cap);
+        else
+            return super.getCapability(cap);
+    }
+
+    @NotNull
+    @Override
+    public <T> LazyOptional<T> getCapability(@NotNull Capability<T> capability, @Nullable Direction facing) {
+        if (this.underlyingPlayer != null)
+            return this.underlyingPlayer.getCapability(capability, facing);
+        else
+            return super.getCapability(capability, facing);
+    }
+
+    @Deprecated
     public abstract Color3 getDripColor();
 
     public Color3 getTransfurColor(TransfurCause cause) { return Color3.WHITE; }
@@ -651,7 +976,7 @@ public abstract class ChangedEntity extends Monster {
         this.tailDragAmountO = this.tailDragAmount;
 
         this.tailDragAmount *= 0.75F;
-        this.tailDragAmount -= Math.toRadians(this.yBodyRot - this.yBodyRotO) * 0.35F;
+        this.tailDragAmount -= (float) (Math.toRadians(this.yBodyRot - this.yBodyRotO) * 0.35F);
         this.tailDragAmount = Mth.clamp(this.tailDragAmount, -1.1F, 1.1F);
 
         simulatedSprings.forEach((direction, map) -> {
@@ -677,15 +1002,23 @@ public abstract class ChangedEntity extends Monster {
         return -0.475;
     }
 
-    protected <T> T callIfNotNull(TransfurVariant<?> variant, Function<TransfurVariant<?>, T> func, T def) {
-        return variant == null ? def : func.apply(variant);
+    public CompoundTag getLeashInfoTag() {
+        return this.leashInfoTag;
     }
 
-    public double getTransfurMaxHealth() { return callIfNotNull(getSelfVariant(), variant -> variant.additionalHealth + 20.0, 20.0); }
+    public void setLeashInfoTag(CompoundTag tag) {
+        this.leashInfoTag = tag;
+    }
 
-    public double getTransfurLandSpeed() { return callIfNotNull(getSelfVariant(), variant -> (double)variant.groundSpeed, 1.0); }
+    @Override
+    public void tickLeash() {
+        super.tickLeash();
+    }
 
-    public double getTransfurSwimSpeed() { return callIfNotNull(getSelfVariant(), variant -> (double)variant.swimSpeed, 1.0); }
+    @Override
+    protected double followLeashSpeed() {
+        return 0.4; // Matches melee attack goal speed
+    }
 
     public static class ChangedClimbOnTopOfPowderSnowGoal extends ClimbOnTopOfPowderSnowGoal {
         protected final ChangedEntity latex;
@@ -770,7 +1103,7 @@ public abstract class ChangedEntity extends Monster {
         return getChangedEntityFlag(FLAG_IS_FLYING);
     }
 
-    public void onDamagedBy(LivingEntity self, LivingEntity source) {
+    public void onDamagedBy(LivingEntity source) {
 
     }
 

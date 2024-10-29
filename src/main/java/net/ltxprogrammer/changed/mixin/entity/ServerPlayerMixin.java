@@ -3,8 +3,10 @@ package net.ltxprogrammer.changed.mixin.entity;
 import com.mojang.authlib.GameProfile;
 import net.ltxprogrammer.changed.Changed;
 import net.ltxprogrammer.changed.entity.PlayerDataExtension;
+import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.init.ChangedGameRules;
 import net.ltxprogrammer.changed.init.ChangedRegistry;
+import net.ltxprogrammer.changed.init.ChangedTransfurVariants;
 import net.ltxprogrammer.changed.network.packet.MountTransfurPacket;
 import net.ltxprogrammer.changed.process.Pale;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
@@ -15,6 +17,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.FloatTag;
 import net.minecraft.nbt.IntTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.decoration.HangingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.fml.LogicalSide;
@@ -23,6 +27,9 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.Optional;
+import java.util.UUID;
 
 @Mixin(ServerPlayer.class)
 public abstract class ServerPlayerMixin extends Player implements PlayerDataExtension {
@@ -38,9 +45,10 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
                 if (!oldVariant.willSurviveTransfur)
                     return;
 
-                var newVariant = ProcessTransfur.setPlayerTransfurVariant(self, oldVariant.getParent(), oldVariant.cause, oldVariant.transfurProgression);
+                var newVariant = ProcessTransfur.setPlayerTransfurVariant(self, oldVariant.getParent(), oldVariant.transfurContext.cause, oldVariant.transfurProgression);
                 newVariant.load(oldVariant.save());
                 newVariant.getChangedEntity().readPlayerVariantData(oldVariant.getChangedEntity().savePlayerVariantData());
+                newVariant.handleRespawn();
             });
         }
     }
@@ -50,7 +58,7 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
         if (tag.contains("PaleExposure")) {
             Pale.setPaleExposure(this, tag.getInt("PaleExposure"));
         }
-        if (tag.contains("TransfurProgress") && tag.contains("TransfurProgressType")) {
+        if (tag.contains("TransfurProgress")) {
             if (tag.get("TransfurProgress") instanceof IntTag intTag) { // Adapt to old progress saving method
                 ProcessTransfur.setPlayerTransfurProgress(this, (float)intTag.getAsInt() * 0.001f);
             } else if (tag.get("TransfurProgress") instanceof FloatTag floatTag) {
@@ -58,7 +66,9 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
             }
         }
         if (tag.contains("TransfurVariant")) {
-            final var variant = ProcessTransfur.setPlayerTransfurVariant(this, ChangedRegistry.TRANSFUR_VARIANT.get().getValue(TagUtil.getResourceLocation(tag, "TransfurVariant")));
+            final var variant = ProcessTransfur.setPlayerTransfurVariant(this,
+                    Optional.ofNullable(ChangedRegistry.TRANSFUR_VARIANT.get().getValue(TagUtil.getResourceLocation(tag, "TransfurVariant")))
+                            .orElseGet(() -> (TransfurVariant)ChangedTransfurVariants.FALLBACK_VARIANT.get()));
             if (tag.contains("TransfurVariantData"))
                 variant.load(tag.getCompound("TransfurVariantData"));
             else {
@@ -68,8 +78,13 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
                     variant.loadAbilities(tag.getCompound("TransfurAbilities"));
             }
 
+            final var entity = variant.getChangedEntity();
             if (tag.contains("TransfurData"))
-                variant.getChangedEntity().readPlayerVariantData(tag.getCompound("LatexData"));
+                entity.readPlayerVariantData(tag.getCompound("LatexData"));
+
+
+            if (tag.contains("Leash", 10))
+                entity.setLeashInfoTag(tag.getCompound("Leash"));
         }
 
         if (tag.contains("PlayerMover")) {
@@ -93,9 +108,27 @@ public abstract class ServerPlayerMixin extends Player implements PlayerDataExte
             TagUtil.putResourceLocation(tag, "TransfurVariant", variant.getFormId());
             tag.put("TransfurVariantData", variant.save());
 
-            var entityData = variant.getChangedEntity().savePlayerVariantData();
+            var entity = variant.getChangedEntity();
+            var entityData = entity.savePlayerVariantData();
             if (!entityData.isEmpty())
                 tag.put("TransfurData", entityData);
+
+            if (entity.getLeashHolder() != null) {
+                CompoundTag compoundtag2 = new CompoundTag();
+                if (entity.getLeashHolder() instanceof LivingEntity) {
+                    UUID uuid = entity.getLeashHolder().getUUID();
+                    compoundtag2.putUUID("UUID", uuid);
+                } else if (entity.getLeashHolder() instanceof HangingEntity) {
+                    BlockPos blockpos = ((HangingEntity) entity.getLeashHolder()).getPos();
+                    compoundtag2.putInt("X", blockpos.getX());
+                    compoundtag2.putInt("Y", blockpos.getY());
+                    compoundtag2.putInt("Z", blockpos.getZ());
+                }
+
+                tag.put("Leash", compoundtag2);
+            } else if (entity.getLeashInfoTag() != null) {
+                tag.put("Leash", entity.getLeashInfoTag().copy());
+            }
         });
         var mover = getPlayerMover();
         if (mover != null) {

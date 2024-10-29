@@ -5,9 +5,9 @@ import net.ltxprogrammer.changed.block.entity.LatexContainerBlockEntity;
 import net.ltxprogrammer.changed.entity.LatexType;
 import net.ltxprogrammer.changed.entity.TransfurCause;
 import net.ltxprogrammer.changed.entity.TransfurContext;
-import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.init.ChangedBlockEntities;
 import net.ltxprogrammer.changed.init.ChangedSounds;
+import net.ltxprogrammer.changed.init.ChangedTransfurVariants;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.BlockPos;
@@ -203,8 +203,8 @@ public class LatexContainerBlock extends AbstractCustomShapeTallEntityBlock impl
             if (container.getFillLevel() == 0)
                 return;
             final var variant = switch (container.getFillType()) {
-                case DARK_LATEX -> TransfurVariant.DARK_LATEX_WOLF_PARTIAL;
-                case WHITE_LATEX -> TransfurVariant.WHITE_LATEX_WOLF;
+                case DARK_LATEX -> ChangedTransfurVariants.DARK_LATEX_WOLF_PARTIAL.get();
+                case WHITE_LATEX -> ChangedTransfurVariants.PURE_WHITE_LATEX_WOLF.get();
                 default -> null;
             };
 

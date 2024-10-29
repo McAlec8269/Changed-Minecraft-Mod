@@ -33,13 +33,16 @@ public class ChangedPackets {
         addNetworkMessage(SyncVariantAbilityPacket.class, SyncVariantAbilityPacket::new);
         addNetworkMessage(MenuUpdatePacket.class, MenuUpdatePacket::new);
         addNetworkMessage(EmotePacket.class, EmotePacket::new);
-        addNetworkMessage(SyncMoverPacket.class, SyncMoverPacket::new);
+        addNetworkMessage(SyncMoversPacket.class, SyncMoversPacket::new);
         addNetworkMessage(ServerboundSetGluBlockPacket.class, ServerboundSetGluBlockPacket::new);
         addNetworkMessage(BasicPlayerInfoPacket.class, BasicPlayerInfoPacket::new);
         addNetworkMessage(SetTransfurVariantDataPacket.class, SetTransfurVariantDataPacket::new);
         addNetworkMessage(TugCameraPacket.class, TugCameraPacket::new);
         addNetworkMessage(ExtraJumpKeybind.class, ExtraJumpKeybind::buffer, ExtraJumpKeybind::new, ExtraJumpKeybind::handler);
         addNetworkMessage(CustomFallable.UpdateFallingBlockEntityData.class, CustomFallable.UpdateFallingBlockEntityData::new);
+        addNetworkMessage(SeatEntityInfoPacket.class, SeatEntityInfoPacket::new);
+        addNetworkMessage(TransfurEntityEventPacket.class, TransfurEntityEventPacket::new);
+        addNetworkMessage(AbilityPayloadPacket.class, AbilityPayloadPacket::new);
     }
 
     private <T> void addNetworkMessage(Class<T> messageType, BiConsumer<T, FriendlyByteBuf> encoder, Function<FriendlyByteBuf, T> decoder,

@@ -2,6 +2,7 @@ package net.ltxprogrammer.changed.item;
 
 import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.init.ChangedTabs;
+import net.ltxprogrammer.changed.init.ChangedTransfurVariants;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.minecraft.stats.Stats;
 import net.minecraft.world.InteractionHand;
@@ -14,7 +15,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 
-public class GasMaskItem extends Item implements WearableItem {
+public class GasMaskItem extends Item implements ExtendedItemProperties {
     public GasMaskItem() {
         super(new Item.Properties().tab(ChangedTabs.TAB_CHANGED_ITEMS).stacksTo(1));
     }
@@ -24,28 +25,22 @@ public class GasMaskItem extends Item implements WearableItem {
         return EquipmentSlot.HEAD;
     }
 
-
     @Override
-    public void wearTick(LivingEntity entity, ItemStack itemStack) {
-
-    }
-
-    @Override
-    public boolean customWearRenderer() {
+    public boolean customWearRenderer(ItemStack itemStack) {
         return true;
     }
 
     @Override
-    public boolean allowedToKeepWearing(LivingEntity entity) {
+    public boolean allowedToWear(ItemStack itemStack, LivingEntity entity, EquipmentSlot slot) {
         return ProcessTransfur.getEntityVariant(entity).map(variant -> {
             if (DarkLatexMask.MASKED_LATEXES.contains(variant.getFormId()))
                 return false;
-            if (variant == TransfurVariant.LATEX_ALIEN)
+            if (variant.is(ChangedTransfurVariants.LATEX_ALIEN))
                 return false;
-            if (variant == TransfurVariant.LATEX_BENIGN_WOLF)
+            if (variant.is(ChangedTransfurVariants.LATEX_BENIGN_WOLF))
                 return false;
-            return true;
-        }).orElse(true);
+            return slot == EquipmentSlot.HEAD;
+        }).orElse(slot == EquipmentSlot.HEAD);
     }
 
     @Override
@@ -53,7 +48,7 @@ public class GasMaskItem extends Item implements WearableItem {
         ItemStack itemstack = player.getItemInHand(hand);
         EquipmentSlot equipmentslot = Mob.getEquipmentSlotForItem(itemstack);
         ItemStack itemstack1 = player.getItemBySlot(equipmentslot);
-        if (itemstack1.isEmpty() && this.allowedToKeepWearing(player)) {
+        if (itemstack1.isEmpty() && this.allowedToWear(itemstack, player, equipmentslot)) {
             player.setItemSlot(equipmentslot, itemstack.copy());
             if (!level.isClientSide()) {
                 player.awardStat(Stats.ITEM_USED.get(this));

@@ -13,7 +13,9 @@ import net.minecraft.client.model.geom.builders.CubeListBuilder;
 import net.minecraft.client.model.geom.builders.LayerDefinition;
 import net.minecraft.client.model.geom.builders.MeshDefinition;
 import net.minecraft.client.model.geom.builders.PartDefinition;
+import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 
 public class ArmorLatexFemaleWolfModel<T extends ChangedEntity> extends LatexHumanoidArmorModel<T, ArmorLatexFemaleWolfModel<T>> {
@@ -28,7 +30,8 @@ public class ArmorLatexFemaleWolfModel<T extends ChangedEntity> extends LatexHum
     private final ModelPart RightArm;
     private final HumanoidAnimator<T, ArmorLatexFemaleWolfModel<T>> animator;
 
-    public ArmorLatexFemaleWolfModel(ModelPart modelPart) {
+    public ArmorLatexFemaleWolfModel(ModelPart modelPart, ArmorModel model) {
+        super(modelPart, model);
         this.Head = modelPart.getChild("Head");
         this.Torso = modelPart.getChild("Torso");
         this.LeftLeg = modelPart.getChild("LeftLeg");
@@ -69,7 +72,26 @@ public class ArmorLatexFemaleWolfModel<T extends ChangedEntity> extends LatexHum
     }
 
     @Override
-    public void renderForSlot(T entity, ItemStack stack, EquipmentSlot slot, PoseStack poseStack, VertexConsumer buffer, int packedLight, int packedOverlay, float red, float green, float blue, float alpha) {
+    public void prepareVisibility(EquipmentSlot armorSlot, ItemStack item) {
+        super.prepareVisibility(armorSlot, item);
+        if (armorSlot == EquipmentSlot.LEGS) {
+            prepareUnifiedLegsForArmor(item, LeftLeg, RightLeg);
+        }
+    }
+
+    @Override
+    public void unprepareVisibility(EquipmentSlot armorSlot, ItemStack item) {
+        super.unprepareVisibility(armorSlot, item);
+        if (armorSlot == EquipmentSlot.LEGS) {
+            prepareUnifiedLegsForArmor(item, LeftLeg, RightLeg);
+        }
+    }
+
+    @Override
+    public void renderForSlot(T entity, RenderLayerParent<T, ?> parent, ItemStack stack, EquipmentSlot slot, PoseStack poseStack, VertexConsumer buffer, int packedLight, int packedOverlay, float red, float green, float blue, float alpha) {
+        poseStack.pushPose();
+        this.scaleForSlot(parent, slot, poseStack);
+
         switch (slot) {
             case HEAD -> Head.render(poseStack, buffer, packedLight, packedOverlay, red, green, blue, alpha);
             case CHEST -> {
@@ -78,23 +100,37 @@ public class ArmorLatexFemaleWolfModel<T extends ChangedEntity> extends LatexHum
                 RightArm.render(poseStack, buffer, packedLight, packedOverlay, red, green, blue, alpha);
             }
             case LEGS -> {
-                prepareLegsForArmor(stack, LeftLeg, RightLeg);
-
                 Torso.render(poseStack, buffer, packedLight, packedOverlay, red, green, blue, alpha);
                 LeftLeg.render(poseStack, buffer, packedLight, packedOverlay, red, green, blue, alpha);
                 RightLeg.render(poseStack, buffer, packedLight, packedOverlay, red, green, blue, alpha);
-
-                unprepareLegsForArmor(stack, LeftLeg, RightLeg);
             }
             case FEET -> {
                 LeftLeg.render(poseStack, buffer, packedLight, packedOverlay, red, green, blue, alpha);
                 RightLeg.render(poseStack, buffer, packedLight, packedOverlay, red, green, blue, alpha);
             }
         }
+
+        poseStack.popPose();
     }
 
     @Override
     public HumanoidAnimator<T, ArmorLatexFemaleWolfModel<T>> getAnimator() {
         return animator;
+    }
+
+    public ModelPart getArm(HumanoidArm arm) {
+        return arm == HumanoidArm.LEFT ? this.LeftArm : this.RightArm;
+    }
+
+    public ModelPart getLeg(HumanoidArm leg) {
+        return leg == HumanoidArm.LEFT ? this.LeftLeg : this.RightLeg;
+    }
+
+    public ModelPart getHead() {
+        return this.Head;
+    }
+
+    public ModelPart getTorso() {
+        return Torso;
     }
 }

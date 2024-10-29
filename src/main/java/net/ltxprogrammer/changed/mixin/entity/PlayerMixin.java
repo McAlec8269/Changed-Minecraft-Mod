@@ -1,40 +1,40 @@
 package net.ltxprogrammer.changed.mixin.entity;
 
+import net.ltxprogrammer.changed.Changed;
 import net.ltxprogrammer.changed.ability.AbstractAbility;
 import net.ltxprogrammer.changed.block.WhiteLatexTransportInterface;
 import net.ltxprogrammer.changed.entity.*;
-import net.ltxprogrammer.changed.entity.variant.TransfurVariant;
 import net.ltxprogrammer.changed.entity.variant.TransfurVariantInstance;
 import net.ltxprogrammer.changed.init.ChangedAbilities;
+import net.ltxprogrammer.changed.init.ChangedAttributes;
 import net.ltxprogrammer.changed.init.ChangedDamageSources;
 import net.ltxprogrammer.changed.init.ChangedSounds;
+import net.ltxprogrammer.changed.network.packet.SyncMoversPacket;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.CameraUtil;
 import net.ltxprogrammer.changed.util.EntityUtil;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffects;
-import net.minecraft.world.entity.EntityDimensions;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.*;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -51,10 +51,12 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
         super(p_20966_, p_20967_);
     }
 
-    @Inject(method = "getMyRidingOffset", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "getMyRidingOffset", at = @At("RETURN"), cancellable = true)
     public void getMyRidingOffset(CallbackInfoReturnable<Double> callback) {
         ProcessTransfur.ifPlayerTransfurred(EntityUtil.playerOrNull(this), variant -> {
-            callback.setReturnValue(variant.getChangedEntity().getMyRidingOffset());
+            callback.setReturnValue(
+                Mth.lerp(variant.getMorphProgression(), callback.getReturnValue(), variant.getChangedEntity().getMyRidingOffset())
+            );
         });
     }
 
@@ -112,6 +114,41 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
         });
     }
 
+    @Inject(method = "createAttributes", at = @At("RETURN"))
+    private static void addChangedAttributes(CallbackInfoReturnable<AttributeSupplier.Builder> cir) {
+        cir.getReturnValue().add(ChangedAttributes.TRANSFUR_DAMAGE.get(), 3.0D);
+    }
+
+    @Inject(method = "attack", at = @At("HEAD"), cancellable = true)
+    public void transfurAttack(Entity target, CallbackInfo ci) {
+        if (!(target instanceof LivingEntity livingEntity))
+            return;
+
+        ProcessTransfur.ifPlayerTransfurred(EntityUtil.playerOrNull(this), (player, variant) -> {
+            ItemStack attackingItem = this.getItemInHand(InteractionHand.MAIN_HAND);
+
+            // Check if item contributes to transfur damage
+            boolean weaponContributes = attackingItem.isEmpty() ||
+                    attackingItem.getAttributeModifiers(EquipmentSlot.MAINHAND).containsKey(ChangedAttributes.TRANSFUR_DAMAGE.get());
+
+            if (weaponContributes && variant.getChangedEntity().tryTransfurTarget(target)) {
+                attackingItem.hurtEnemy(livingEntity, player);
+
+                ci.cancel();
+            }
+        });
+    }
+
+    @Inject(method = "setItemSlot", at = @At("HEAD"), cancellable = true)
+    public void denyInvalidArmor(EquipmentSlot slot, ItemStack item, CallbackInfo ci) {
+        ProcessTransfur.ifPlayerTransfurred(EntityUtil.playerOrNull(this), (player, variant) -> {
+            if (!variant.canWear(player, item, slot)) {
+                ci.cancel();
+                this.setItemSlot(EquipmentSlot.MAINHAND, item);
+            }
+        });
+    }
+
     // ADDITIONAL DATA
     @Unique
     public TransfurVariantInstance<?> latexVariant = null;
@@ -125,12 +162,12 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
     public BasicPlayerInfo basicPlayerInfo = new BasicPlayerInfo();
 
     @Override
-    public TransfurVariantInstance<?> getLatexVariant() {
+    public TransfurVariantInstance<?> getTransfurVariant() {
         return latexVariant;
     }
 
     @Override
-    public void setLatexVariant(TransfurVariantInstance<?> latexVariant) {
+    public void setTransfurVariant(TransfurVariantInstance<?> latexVariant) {
         this.latexVariant = latexVariant;
     }
 
@@ -172,25 +209,28 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
                 ci.cancel();
     }
 
-    private float getFoodMul(TransfurVariant<?> variant) {
-        if (isSwimming() || this.isEyeInFluid(FluidTags.WATER) || this.isInWater()) {
-            return 1.0f - (variant.swimMultiplier() - 1.0f) * 0.85f;
-        }
-
-        else if (onGround && isSprinting()) {
-            return 1.0f - (variant.landMultiplier() - 1.0f) * 0.85f;
-        }
-
-        return 1.0f;
+    @ModifyArg(method = "checkMovementStatistics", at =
+    @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;causeFoodExhaustion(F)V", ordinal = 0))
+    public float foodEfficiencySwimming(float distance) {
+        return latexVariant != null ? latexVariant.getSwimEfficiency() * distance : distance;
     }
 
-    @Inject(method = "causeFoodExhaustion", at = @At("HEAD"), cancellable = true)
-    public void causeFoodExhaustion(float amount, CallbackInfo ci) {
-        Player player = (Player)(Object)this;
-        if (latexVariant != null && !player.getAbilities().invulnerable && !this.level.isClientSide) {
-            ci.cancel();
-            player.getFoodData().addExhaustion(amount * getFoodMul(latexVariant.getParent()));
-        }
+    @ModifyArg(method = "checkMovementStatistics", at =
+    @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;causeFoodExhaustion(F)V", ordinal = 1))
+    public float foodEfficiencyWalkUnderWater(float distance) {
+        return latexVariant != null ? latexVariant.getSwimEfficiency() * distance : distance;
+    }
+
+    @ModifyArg(method = "checkMovementStatistics", at =
+    @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;causeFoodExhaustion(F)V", ordinal = 2))
+    public float foodEfficiencyWalkOnWater(float distance) {
+        return latexVariant != null ? latexVariant.getSwimEfficiency() * distance : distance;
+    }
+
+    @ModifyArg(method = "checkMovementStatistics", at =
+    @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;causeFoodExhaustion(F)V", ordinal = 3))
+    public float foodEfficiencySprinting(float distance) {
+        return latexVariant != null ? latexVariant.getSprintEfficiency() * distance : distance;
     }
 
     @Inject(method = "getDimensions", at = @At("RETURN"), cancellable = true)
@@ -213,17 +253,16 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
         });
     }
 
-    // TODO make interactions pass the grabbed entity
-    @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;isSpectator()Z"))
-    public boolean isSpectatorOrGrabbed(Player player) {
-        if (player instanceof LivingEntityDataExtension ext) {
+    @Inject(method = "tick", at = @At("RETURN"))
+    public void checkGrabbed(CallbackInfo ci) {
+        if (this instanceof LivingEntityDataExtension ext) {
             var grabbedBy = ext.getGrabbedBy();
             var ability = AbstractAbility.getAbilityInstance(grabbedBy, ChangedAbilities.GRAB_ENTITY_ABILITY.get());
-            if (ability != null && !ability.grabbedHasControl)
-                return true;
+            if (ability != null && !ability.grabbedHasControl) {
+                this.noPhysics = true;
+                this.onGround = false;
+            }
         }
-
-        return this.isSpectator();
     }
 
     @Nullable
@@ -234,7 +273,12 @@ public abstract class PlayerMixin extends LivingEntity implements PlayerDataExte
 
     @Override
     public void setPlayerMover(@Nullable PlayerMoverInstance<?> playerMover) {
+        if (this.playerMover != null)
+            this.playerMover.onRemove((Player)(Object)this);
+
         this.playerMover = playerMover;
+        if (!level.isClientSide)
+            Changed.PACKET_HANDLER.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this), SyncMoversPacket.Builder.of((Player)(Object)this));
     }
 
     @Override

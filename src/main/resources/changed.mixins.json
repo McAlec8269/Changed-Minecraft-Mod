@@ -7,7 +7,9 @@
   "mixins": [
     "EnchantmentHelperMixin",
     "GameDataMixin",
+    "InventoryMenuMixin",
     "NbtUtilsMixin",
+    "PackMixin",
     "PrimaryLevelDataMixin",
     "StateHolderMixin",
     "StructurePiecesBuilderMixin",
@@ -38,7 +40,10 @@
     "item.ItemMixin",
     "item.ItemStackMixin",
     "item.ShovelItemMixin",
+    "network.ClientboundSetEntityLinkPacketMixin",
+    "server.MinecraftServerMixin",
     "server.ServerEntityMixin",
+    "server.ServerLevelMixin",
     "server.ServerPlayerGameModeMixin"
   ],
   "client": [
@@ -46,6 +51,7 @@
     "client.ClientLevelMixin",
     "client.ForgeHooksClientMixin",
     "client.MinecraftMixin",
+    "client.MouseHandlerMixin",
     "client.OptionsMixin",
     "client.SkinManagerMixin",
     "client.TutorialMixin",
@@ -62,6 +68,7 @@
     "gui.SplashManagerMixin",
     "gui.TitleScreenMixin",
     "item.ItemRendererMixin",
+    "network.ClientPacketListenerMixin",
     "render.AtlasSetMixin",
     "render.CameraMixin",
     "render.CubeDefinitionMixin",
@@ -83,6 +90,7 @@
     "render.PartDefinitionMixin",
     "render.PlayerRendererMixin",
     "render.PoseStackMixin",
+    "render.RenderLayerMixin",
     "render.RenderTypeMixin",
     "render.TextureAtlasMixin"
   ],

@@ -1,5 +1,6 @@
 package net.ltxprogrammer.changed.entity.beast;
 
+import net.ltxprogrammer.changed.entity.ComplexRenderer;
 import net.ltxprogrammer.changed.entity.HairStyle;
 import net.ltxprogrammer.changed.entity.TransfurCause;
 import net.ltxprogrammer.changed.entity.TransfurMode;
@@ -9,14 +10,17 @@ import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeMap;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.common.ForgeMod;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-public class DarkLatexWolfPartial extends AbstractDarkLatexEntity {
+public class DarkLatexWolfPartial extends AbstractDarkLatexEntity implements ComplexRenderer {
     public DarkLatexWolfPartial(EntityType<? extends DarkLatexWolfPartial> p_19870_, Level p_19871_) {
         super(p_19870_, p_19871_);
     }
@@ -71,5 +75,12 @@ public class DarkLatexWolfPartial extends AbstractDarkLatexEntity {
 
     public Color3 getTransfurColor(TransfurCause cause) {
         return Color3.DARK;
+    }
+
+    @Override
+    protected void setAttributes(AttributeMap attributes) {
+        super.setAttributes(attributes);
+        attributes.getInstance(Attributes.MOVEMENT_SPEED).setBaseValue(1.025);
+        attributes.getInstance(ForgeMod.SWIM_SPEED.get()).setBaseValue(0.975);
     }
 }

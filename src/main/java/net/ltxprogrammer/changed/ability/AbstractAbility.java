@@ -13,8 +13,10 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.registries.ForgeRegistryEntry;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nullable;
+import java.util.Optional;
 import java.util.function.BiFunction;
 
 public abstract class AbstractAbility<Instance extends AbstractAbilityInstance> extends ForgeRegistryEntry<AbstractAbility<?>> {
@@ -58,6 +60,10 @@ public abstract class AbstractAbility<Instance extends AbstractAbilityInstance> 
 
             else
                 startedUsing = false;
+        }
+
+        public boolean canKeepUsing() {
+            return abilityInstance.canKeepUsing();
         }
 
         public void tickAbility() {
@@ -180,7 +186,7 @@ public abstract class AbstractAbility<Instance extends AbstractAbilityInstance> 
         HOLD((keyState, oldState, controller) -> {
             if (keyState && !oldState)
                 controller.activateAbility();
-            else if (keyState)
+            else if (keyState && controller.canKeepUsing())
                 controller.tickAbility();
             else if (oldState) {
                 controller.deactivateAbility();
@@ -235,7 +241,7 @@ public abstract class AbstractAbility<Instance extends AbstractAbilityInstance> 
     public int getCoolDown(IAbstractChangedEntity entity) { return 0; }
 
     public boolean canUse(IAbstractChangedEntity entity) { return false; }
-    public boolean canKeepUsing(IAbstractChangedEntity entity) { return false; }
+    public boolean canKeepUsing(IAbstractChangedEntity entity) { return canUse(entity); }
 
     public void startUsing(IAbstractChangedEntity entity) {}
     public void tick(IAbstractChangedEntity entity) {}
@@ -291,5 +297,18 @@ public abstract class AbstractAbility<Instance extends AbstractAbilityInstance> 
         }
 
         return null;
+    }
+
+    @NotNull
+    public static <T extends AbstractAbilityInstance> Optional<T> getAbilityInstanceSafe(LivingEntity livingEntity, AbstractAbility<T> ability) {
+        if (livingEntity == null) return Optional.empty();
+
+        if (livingEntity instanceof ChangedEntity latex)
+            return Optional.ofNullable(latex.getAbilityInstance(ability));
+        else if (livingEntity instanceof Player player) {
+            return ProcessTransfur.getPlayerTransfurVariantSafe(player).map(instance -> instance.getAbilityInstance(ability));
+        }
+
+        return Optional.empty();
     }
 }

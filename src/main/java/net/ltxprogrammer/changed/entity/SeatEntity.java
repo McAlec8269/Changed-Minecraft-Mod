@@ -1,9 +1,14 @@
 package net.ltxprogrammer.changed.entity;
 
+import net.ltxprogrammer.changed.Changed;
 import net.ltxprogrammer.changed.block.SeatableBlock;
+import net.ltxprogrammer.changed.block.entity.SeatableBlockEntity;
 import net.ltxprogrammer.changed.init.ChangedEntities;
+import net.ltxprogrammer.changed.network.packet.SeatEntityInfoPacket;
+import net.ltxprogrammer.changed.util.TagUtil;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -11,7 +16,6 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -29,22 +33,18 @@ public class SeatEntity extends Entity {
         super(type, level);
     }
 
-    public static SeatEntity createFor(Level level, BlockState state, BlockPos pos, boolean seatedInvisible) {
-        if (level.isClientSide) {
-            var listOfSeats = level.getEntitiesOfClass(SeatEntity.class, new AABB(pos)); // Check for existing SeatEntities to prevent duplicates
-            if (listOfSeats.isEmpty())
-                return null;
-
-            listOfSeats = listOfSeats.stream().filter(entity -> {
-                return entity.getAttachedBlockPos().equals(pos) && entity.getAttachedBlockState().isPresent() && entity.getAttachedBlockState().get().getBlock() == state.getBlock();
-            }).toList();
-
-            if (listOfSeats.isEmpty())
-                return null;
-
-            return listOfSeats.get(0);
+    @Override
+    public void onAddedToWorld() {
+        super.onAddedToWorld();
+        final BlockPos attached = this.getAttachedBlockPos();
+        if (level.isLoaded(attached) && level.getBlockEntity(attached) instanceof SeatableBlockEntity seatableBlockEntity) {
+            var existing = seatableBlockEntity.getEntityHolder();
+            if (existing == null || existing.isRemoved())
+                seatableBlockEntity.setEntityHolder(this);
         }
+    }
 
+    private static SeatEntity actuallyCreateFor(Level level, BlockState state, BlockPos pos, boolean seatedInvisible) {
         SeatEntity seat = ChangedEntities.SEAT_ENTITY.get().create(level);
         if (seat == null)
             return null;
@@ -60,7 +60,24 @@ public class SeatEntity extends Entity {
         else
             seat.setPos(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
 
-        level.addFreshEntity(seat);
+        return seat;
+    }
+
+    public static SeatEntity createFor(Level level, BlockState state, BlockPos pos, boolean seatedInvisible) {
+        if (level.isClientSide) {
+            var seatEntity = level.getEntitiesOfClass(SeatEntity.class, new AABB(pos)).stream().filter(entity -> {
+                return entity.getAttachedBlockPos().equals(pos) && entity.getAttachedBlockState().isPresent() && entity.getAttachedBlockState().get().getBlock() == state.getBlock();
+            }).findFirst(); // Check for existing SeatEntities to prevent duplicates
+
+            return seatEntity.orElseGet(() -> {
+                Changed.PACKET_HANDLER.sendToServer(new SeatEntityInfoPacket(pos)); // Request the server send information for the seat entity
+                return actuallyCreateFor(level, state, pos, seatedInvisible);
+            });
+        }
+
+        SeatEntity seat = actuallyCreateFor(level, state, pos, seatedInvisible);
+        if (seat != null)
+            level.addFreshEntity(seat);
         return seat;
     }
 
@@ -136,16 +153,32 @@ public class SeatEntity extends Entity {
                 this.setPos(blockPos.getX() + 0.5, blockPos.getY() - 0.5, blockPos.getZ() + 0.5);
         }
 
-        if (shouldSeatedBeInvisible() && this.getFirstPassenger() instanceof Player player && !player.isInvisible()) {
-            player.setInvisible(true);
-        }
+        if (this.getFirstPassenger() != null)
+            this.tickCount = 0;
+        else if (this.tickCount > 100)
+            this.discard();
     }
 
     @Override
-    public void remove(RemovalReason reason) {
-        if (this.shouldSeatedBeInvisible())
-            this.getPassengers().forEach(entity -> entity.setInvisible(false));
-        super.remove(reason);
+    protected void addPassenger(@NotNull Entity entity) {
+        super.addPassenger(entity);
+
+        this.getAttachedBlockState().ifPresent(blockState -> {
+            if (blockState.getBlock() instanceof SeatableBlock seatableBlock) {
+                seatableBlock.onEnterSeat(entity.level, blockState, this.getAttachedBlockPos(), entity);
+            }
+        });
+    }
+
+    @Override
+    protected void removePassenger(@NotNull Entity entity) {
+        super.removePassenger(entity);
+
+        this.getAttachedBlockState().ifPresent(blockState -> {
+            if (blockState.getBlock() instanceof SeatableBlock seatableBlock) {
+                seatableBlock.onExitSeat(entity.level, blockState, this.getAttachedBlockPos(), entity);
+            }
+        });
     }
 
     @Override
@@ -157,12 +190,21 @@ public class SeatEntity extends Entity {
 
     @Override
     protected void readAdditionalSaveData(@NotNull CompoundTag tag) {
-
+        if (tag.contains("attachedBlockState"))
+            this.entityData.set(BLOCK_STATE, Optional.of(NbtUtils.readBlockState(tag.getCompound("attachedBlockState"))));
+        if (tag.contains("attachedBlockPos"))
+            this.entityData.set(BLOCK_POS, TagUtil.getBlockPos(tag, "attachedBlockPos"));
+        if (tag.contains("seatedInvisible"))
+            this.entityData.set(SEATED_INVISIBLE, tag.getBoolean("seatedInvisible"));
     }
 
     @Override
     protected void addAdditionalSaveData(@NotNull CompoundTag tag) {
-
+        this.getAttachedBlockState().ifPresent(state -> {
+            tag.put("attachedBlockState", NbtUtils.writeBlockState(state));
+        });
+        TagUtil.putBlockPos(tag, "attachedBlockPos", this.getAttachedBlockPos());
+        tag.putBoolean("seatedInvisible", this.shouldSeatedBeInvisible());
     }
 
     @Override

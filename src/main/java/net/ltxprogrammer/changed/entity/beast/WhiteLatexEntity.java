@@ -9,6 +9,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeMap;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.player.Player;
@@ -20,7 +21,7 @@ import java.util.function.Predicate;
 
 import static net.ltxprogrammer.changed.block.AbstractLatexBlock.COVERED;
 
-public abstract class WhiteLatexEntity extends LightLatexWolfMale {
+public abstract class WhiteLatexEntity extends WhiteLatexWolfMale {
     public WhiteLatexEntity(EntityType<? extends WhiteLatexEntity> p_19870_, Level p_19871_) {
         super(p_19870_, p_19871_);
     }
@@ -32,16 +33,16 @@ public abstract class WhiteLatexEntity extends LightLatexWolfMale {
     }
 
     @Override
-    public void onDamagedBy(LivingEntity self, LivingEntity source) {
-        super.onDamagedBy(self, source);
+    public void onDamagedBy(LivingEntity source) {
+        super.onDamagedBy(source);
         if (source instanceof Player player && player.isCreative())
             return;
 
         double d0 = this.getAttributeValue(Attributes.FOLLOW_RANGE);
-        AABB aabb = AABB.unitCubeFromLowerCorner(self.position()).inflate(d0, 10.0D, d0);
-        this.level.getEntitiesOfClass(this.getClass(), aabb, EntitySelector.NO_SPECTATORS).forEach(whiteChangedEntity -> {
-            if (whiteChangedEntity.getTarget() == null && !whiteChangedEntity.isAlliedTo(source))
-                whiteChangedEntity.setTarget(source);
+        AABB aabb = AABB.unitCubeFromLowerCorner(this.position()).inflate(d0, 10.0D, d0);
+        this.level.getEntitiesOfClass(WhiteLatexEntity.class, aabb, EntitySelector.NO_SPECTATORS).forEach(nearby -> {
+            if (nearby.getTarget() == null && !nearby.isAlliedTo(source))
+                nearby.setTarget(source);
         });
     }
 
@@ -89,5 +90,11 @@ public abstract class WhiteLatexEntity extends LightLatexWolfMale {
             return;
         entities.forEach(Entity::discard);
         ChangedSounds.broadcastSound(behemoth, ChangedSounds.POISON, 1.0f, 1.0f);
+    }
+
+    @Override
+    protected void setAttributes(AttributeMap attributes) {
+        super.setAttributes(attributes);
+        attributes.getInstance(Attributes.FOLLOW_RANGE).setBaseValue(16.0);
     }
 }

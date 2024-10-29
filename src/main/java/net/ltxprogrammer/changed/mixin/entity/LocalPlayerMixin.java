@@ -3,6 +3,8 @@ package net.ltxprogrammer.changed.mixin.entity;
 
 import com.mojang.authlib.GameProfile;
 import net.ltxprogrammer.changed.Changed;
+import net.ltxprogrammer.changed.client.NullInput;
+import net.ltxprogrammer.changed.entity.LivingEntityDataExtension;
 import net.ltxprogrammer.changed.entity.PlayerDataExtension;
 import net.ltxprogrammer.changed.process.ProcessTransfur;
 import net.ltxprogrammer.changed.util.InputWrapper;
@@ -19,10 +21,12 @@ import net.minecraft.stats.StatsCounter;
 import net.minecraft.tags.FluidTags;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.common.ForgeMod;
 import net.minecraftforge.fml.LogicalSide;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -30,7 +34,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @OnlyIn(Dist.CLIENT)
 @Mixin(LocalPlayer.class)
-public abstract class LocalPlayerMixin extends AbstractClientPlayer implements PlayerDataExtension {
+public abstract class LocalPlayerMixin extends AbstractClientPlayer implements PlayerDataExtension, LivingEntityDataExtension {
     public LocalPlayerMixin(ClientLevel p_108548_, GameProfile p_108549_) {
         super(p_108548_, p_108549_);
     }
@@ -123,7 +127,7 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer implements P
                 }
             }
 
-            if (variant.getParent().swimSpeed >= 1.1F && !variant.getParent().hasLegs && player.isUnderWater())
+            if (player.getAttributeBaseValue(ForgeMod.SWIM_SPEED.get()) >= 1.1F && !variant.getParent().hasLegs && player.isUnderWater())
                 player.setSprinting(true);
         });
     }
@@ -157,10 +161,24 @@ public abstract class LocalPlayerMixin extends AbstractClientPlayer implements P
         });
     }
 
+    @Unique
+    private Input inputCopy = null;
+
     @Inject(method = "tick", at = @At("HEAD"))
     public void tick(CallbackInfo callback) {
         var playerMover = getPlayerMover();
         if (playerMover != null && playerMover.shouldRemoveMover(this, InputWrapper.from(this), LogicalSide.CLIENT))
             setPlayerMover(null);
+
+        boolean isNullInput = input instanceof NullInput;
+        if (this.getNoControlTicks() > 0) {
+            if (!isNullInput) {
+                inputCopy = input;
+                input = new NullInput();
+            }
+        } else if (isNullInput) {
+            input = inputCopy;
+            inputCopy = null;
+        }
     }
 }
